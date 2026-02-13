@@ -1,0 +1,14 @@
+{
+  "name": "bookurier/prestashop-bookurier",
+  "description": "Bookurier courier module scaffold for PrestaShop 1.7, 8 and 9.",
+  "type": "prestashop-module",
+  "license": "proprietary",
+  "require": {
+    "php": ">=7.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "Bookurier\\": "src/"
+    }
+  }
+}
