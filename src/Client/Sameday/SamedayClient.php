@@ -37,9 +37,9 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
     const BASE_URL_PROD = 'https://api.sameday.ro';
 
     /**
-     * @var array<int, string>
+     * @var string
      */
-    private $authEndpoints = array('/api/authentication', '/api/authenticate');
+    const ENDPOINT_AUTH = '/api/authenticate';
 
     /**
      * @var string
@@ -128,42 +128,34 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
             throw new ApiException('SameDay API credentials are not configured.');
         }
 
-        $lastError = '';
-        foreach ($this->authEndpoints as $authEndpoint) {
-            $response = $this->requestOrFail('SameDay', 'POST', $this->buildUrl($authEndpoint), array(
-                'headers' => array(
-                    'X-AUTH-USERNAME: ' . $this->username,
-                    'X-AUTH-PASSWORD: ' . $this->password,
-                ),
-                'form_params' => array('remember_me' => $rememberMe ? 1 : 0),
-            ));
+        $response = $this->requestOrFail('SameDay', 'POST', $this->buildUrl(self::ENDPOINT_AUTH), array(
+            'headers' => array(
+                'X-AUTH-USERNAME: ' . $this->username,
+                'X-AUTH-PASSWORD: ' . $this->password,
+            ),
+            'form_params' => array('remember_me' => $rememberMe ? 1 : 0),
+        ));
 
-            if ($response->getStatusCode() === 404) {
-                $lastError = 'Auth endpoint not found at ' . $authEndpoint . '.';
-                continue;
+        $data = $this->decodeJsonOrFail('SameDay', $response, self::ENDPOINT_AUTH);
+
+        if (empty($data['token'])) {
+            $message = $this->extractApiErrorMessage($data);
+            if ($message === '') {
+                $message = 'SameDay authentication did not return a token.';
             }
 
-            $data = $this->decodeJsonOrFail('SameDay', $response, $authEndpoint);
-            if (isset($data['error']['message'])) {
-                $lastError = (string) $data['error']['message'];
-            }
-
-            if (!empty($data['token'])) {
-                $this->token = (string) $data['token'];
-                $this->tokenExpireAt = isset($data['expire_at']) ? (string) $data['expire_at'] : '';
-
-                $this->logger->info('SameDay authentication successful.', array(
-                    'endpoint' => $authEndpoint,
-                    'expire_at' => $this->tokenExpireAt,
-                ));
-
-                return new AuthTokenDto($this->token, $this->tokenExpireAt);
-            }
+            throw new ApiException($message);
         }
 
-        throw new ApiException(
-            $lastError !== '' ? $lastError : 'SameDay authentication failed for all known auth endpoints.'
-        );
+        $this->token = (string) $data['token'];
+        $this->tokenExpireAt = isset($data['expire_at']) ? (string) $data['expire_at'] : '';
+
+        $this->logger->info('SameDay authentication successful.', array(
+            'endpoint' => self::ENDPOINT_AUTH,
+            'expire_at' => $this->tokenExpireAt,
+        ));
+
+        return new AuthTokenDto($this->token, $this->tokenExpireAt);
     }
 
     /**
