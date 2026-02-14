@@ -1,0 +1,17 @@
+.bookurier-sameday-pickup {
+    min-width: 560px;
+}
+
+#BOOKURIER_SAMEDAY_PICKUP_POINT_chosen {
+    min-width: 560px !important;
+    width: min(860px, 100%) !important;
+}
+
+#BOOKURIER_SAMEDAY_PICKUP_POINT_chosen .chosen-drop {
+    width: 100% !important;
+}
+
+#BOOKURIER_SAMEDAY_PICKUP_POINT_chosen .chosen-results li {
+    white-space: normal;
+    line-height: 1.3;
+}
