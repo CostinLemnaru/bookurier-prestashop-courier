@@ -47,6 +47,16 @@ class Bookurier extends CarrierModule
         );
     }
 
+    public function hookDisplayBackOfficeHeader($params)
+    {
+        return '';
+    }
+
+    public function hookActionAdminControllerSetMedia($params)
+    {
+        // Kept intentionally empty for scaffold compatibility.
+    }
+
     public function getOrderShippingCost($params, $shipping_cost)
     {
         return false;
