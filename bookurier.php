@@ -7,8 +7,62 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Bookurier\Client\Bookurier\BookurierClient;
+use Bookurier\Client\Bookurier\BookurierClientInterface;
+use Bookurier\Client\Sameday\SamedayClient;
+use Bookurier\Client\Sameday\SamedayClientInterface;
+use Bookurier\Logging\LoggerFactory;
+use Bookurier\Logging\LoggerInterface;
+
 class Bookurier extends CarrierModule
 {
+    /**
+     * @var string
+     */
+    const CONFIG_LOG_LEVEL = 'BOOKURIER_LOG_LEVEL';
+
+    /**
+     * @var string
+     */
+    const CONFIG_SAMEDAY_ENV = 'BOOKURIER_SAMEDAY_ENV';
+
+    /**
+     * @var string
+     */
+    const CONFIG_API_USER = 'BOOKURIER_API_USER';
+
+    /**
+     * @var string
+     */
+    const CONFIG_API_PASSWORD = 'BOOKURIER_API_PASSWORD';
+
+    /**
+     * @var string
+     */
+    const CONFIG_SAMEDAY_API_USERNAME = 'BOOKURIER_SAMEDAY_API_USERNAME';
+
+    /**
+     * @var string
+     */
+    const CONFIG_SAMEDAY_API_PASSWORD = 'BOOKURIER_SAMEDAY_API_PASSWORD';
+
+    /**
+     * @var LoggerInterface|null
+     */
+    private $logger;
+
+    /**
+     * @var BookurierClientInterface|null
+     */
+    private $bookurierClient;
+
+    /**
+     * @var SamedayClientInterface|null
+     */
+    private $samedayClient;
+
     public function __construct()
     {
         $this->name = 'bookurier';
@@ -32,11 +86,16 @@ class Bookurier extends CarrierModule
     {
         return parent::install()
             && $this->registerHook('displayBackOfficeHeader')
-            && $this->registerHook('actionAdminControllerSetMedia');
+            && $this->registerHook('actionAdminControllerSetMedia')
+            && Configuration::updateValue(self::CONFIG_LOG_LEVEL, 'info')
+            && Configuration::updateValue(self::CONFIG_SAMEDAY_ENV, 'demo');
     }
 
     public function uninstall()
     {
+        Configuration::deleteByName(self::CONFIG_LOG_LEVEL);
+        Configuration::deleteByName(self::CONFIG_SAMEDAY_ENV);
+
         return parent::uninstall();
     }
 
@@ -65,5 +124,57 @@ class Bookurier extends CarrierModule
     public function getOrderShippingCostExternal($params)
     {
         return false;
+    }
+
+    /**
+     * @return LoggerInterface
+     */
+    public function getLogger()
+    {
+        if ($this->logger === null) {
+            $level = (string) Configuration::get(self::CONFIG_LOG_LEVEL);
+            if ($level === '') {
+                $level = 'info';
+            }
+
+            $this->logger = LoggerFactory::create($this->name, $level);
+        }
+
+        return $this->logger;
+    }
+
+    /**
+     * @return BookurierClientInterface
+     */
+    public function getBookurierClient()
+    {
+        if ($this->bookurierClient === null) {
+            $this->bookurierClient = new BookurierClient(
+                (string) Configuration::get(self::CONFIG_API_USER),
+                (string) Configuration::get(self::CONFIG_API_PASSWORD),
+                null,
+                $this->getLogger()
+            );
+        }
+
+        return $this->bookurierClient;
+    }
+
+    /**
+     * @return SamedayClientInterface
+     */
+    public function getSamedayClient()
+    {
+        if ($this->samedayClient === null) {
+            $this->samedayClient = new SamedayClient(
+                (string) Configuration::get(self::CONFIG_SAMEDAY_API_USERNAME),
+                (string) Configuration::get(self::CONFIG_SAMEDAY_API_PASSWORD),
+                (string) (Configuration::get(self::CONFIG_SAMEDAY_ENV) ?: 'demo'),
+                null,
+                $this->getLogger()
+            );
+        }
+
+        return $this->samedayClient;
     }
 }
