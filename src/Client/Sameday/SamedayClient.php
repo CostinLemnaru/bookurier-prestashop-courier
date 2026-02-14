@@ -130,8 +130,8 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
 
         $response = $this->requestOrFail('SameDay', 'POST', $this->buildUrl(self::ENDPOINT_AUTH), array(
             'headers' => array(
-                'X-AUTH-USERNAME: ' . $this->username,
-                'X-AUTH-PASSWORD: ' . $this->password,
+                'X-AUTH-USERNAME' => $this->username,
+                'X-AUTH-PASSWORD' => $this->password,
             ),
             'form_params' => array('remember_me' => $rememberMe ? 1 : 0),
         ));
@@ -287,7 +287,7 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
     {
         $token = $this->ensureToken();
         $headers = isset($options['headers']) && is_array($options['headers']) ? $options['headers'] : array();
-        $headers[] = 'X-AUTH-TOKEN: ' . $token;
+        $headers['X-AUTH-TOKEN'] = $token;
         $options['headers'] = $headers;
 
         return $this->requestOrFail('SameDay', $method, $this->buildUrl($endpoint), $options);
