@@ -2,8 +2,15 @@
 
 namespace Bookurier\Install;
 
+use Bookurier\Install\SamedayLockerStorage;
+
 class Installer
 {
+    const CARRIER_MAX_WEIGHT = 100000;
+    const CARRIER_MAX_WIDTH = 1000;
+    const CARRIER_MAX_HEIGHT = 1000;
+    const CARRIER_MAX_DEPTH = 1000;
+
     private $module;
 
     public function __construct($module)
@@ -37,29 +44,7 @@ class Installer
 
     private function installDatabase()
     {
-        $table = _DB_PREFIX_ . 'bookurier_sameday_locker';
-        $sql = 'CREATE TABLE IF NOT EXISTS `' . $table . '` (
-            `id_bookurier_sameday_locker` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-            `locker_id` INT UNSIGNED NOT NULL,
-            `name` VARCHAR(255) NOT NULL DEFAULT \'\',
-            `county` VARCHAR(191) NOT NULL DEFAULT \'\',
-            `city` VARCHAR(191) NOT NULL DEFAULT \'\',
-            `address` VARCHAR(255) NOT NULL DEFAULT \'\',
-            `postal_code` VARCHAR(32) NOT NULL DEFAULT \'\',
-            `lat` VARCHAR(32) NOT NULL DEFAULT \'\',
-            `lng` VARCHAR(32) NOT NULL DEFAULT \'\',
-            `country_code` VARCHAR(8) NOT NULL DEFAULT \'\',
-            `is_active` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
-            `updated_at` DATETIME NOT NULL,
-            `created_at` DATETIME NOT NULL,
-            PRIMARY KEY (`id_bookurier_sameday_locker`),
-            UNIQUE KEY `uniq_locker_id` (`locker_id`),
-            KEY `idx_city` (`city`),
-            KEY `idx_county` (`county`),
-            KEY `idx_active` (`is_active`)
-        ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
-
-        return \Db::getInstance()->execute($sql);
+        return SamedayLockerStorage::ensureTable();
     }
 
     private function installCarrier()
@@ -70,7 +55,7 @@ class Installer
             if ($idCarrier > 0) {
                 $carrier = new \Carrier($idCarrier);
                 if (\Validate::isLoadedObject($carrier) && (int) $carrier->deleted === 0) {
-                    return true;
+                    return $this->applyCarrierLimits($carrier);
                 }
             }
         }
@@ -86,6 +71,10 @@ class Installer
         $carrier->need_range = true;
         $carrier->shipping_method = \Carrier::SHIPPING_METHOD_WEIGHT;
         $carrier->range_behavior = 0;
+        $carrier->max_weight = self::CARRIER_MAX_WEIGHT;
+        $carrier->max_width = self::CARRIER_MAX_WIDTH;
+        $carrier->max_height = self::CARRIER_MAX_HEIGHT;
+        $carrier->max_depth = self::CARRIER_MAX_DEPTH;
         $carrier->delay = array();
 
         foreach (\Language::getLanguages(false) as $language) {
@@ -96,7 +85,18 @@ class Installer
             return false;
         }
 
-        \Configuration::updateValue(\Bookurier::CONFIG_CARRIER_REFERENCE, (string) $carrier->id_reference);
+        $carrierReference = (int) $carrier->id_reference;
+        if ($carrierReference <= 0) {
+            $carrierReference = (int) $carrier->id;
+            $carrier->id_reference = $carrierReference;
+            if (!$carrier->update()) {
+                return false;
+            }
+        }
+
+        if (!\Configuration::updateValue(\Bookurier::CONFIG_CARRIER_REFERENCE, (string) $carrierReference)) {
+            return false;
+        }
 
         $zones = \Zone::getZones(true);
         foreach ($zones as $zone) {
@@ -133,5 +133,33 @@ class Installer
     private function getCarrierReference()
     {
         return (int) \Configuration::get(\Bookurier::CONFIG_CARRIER_REFERENCE);
+    }
+
+    private function applyCarrierLimits(\Carrier $carrier)
+    {
+        $updated = false;
+
+        if ((int) $carrier->max_weight !== self::CARRIER_MAX_WEIGHT) {
+            $carrier->max_weight = self::CARRIER_MAX_WEIGHT;
+            $updated = true;
+        }
+        if ((int) $carrier->max_width !== self::CARRIER_MAX_WIDTH) {
+            $carrier->max_width = self::CARRIER_MAX_WIDTH;
+            $updated = true;
+        }
+        if ((int) $carrier->max_height !== self::CARRIER_MAX_HEIGHT) {
+            $carrier->max_height = self::CARRIER_MAX_HEIGHT;
+            $updated = true;
+        }
+        if ((int) $carrier->max_depth !== self::CARRIER_MAX_DEPTH) {
+            $carrier->max_depth = self::CARRIER_MAX_DEPTH;
+            $updated = true;
+        }
+
+        if (!$updated) {
+            return true;
+        }
+
+        return $carrier->update();
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Bookurier\Install;
 
+use Bookurier\Install\SamedayLockerStorage;
+
 class Uninstaller
 {
     public function uninstall()
@@ -39,23 +41,24 @@ class Uninstaller
         }
 
         $rows = \Db::getInstance()->executeS(
-            'SELECT id_carrier FROM ' . _DB_PREFIX_ . 'carrier WHERE id_reference = ' . (int) $idReference
+            'SELECT id_carrier FROM ' . _DB_PREFIX_ . 'carrier WHERE id_reference = ' . (int) $idReference . ' AND deleted = 0'
         );
 
         if (!is_array($rows)) {
             return false;
         }
 
-        foreach ($rows as $row) {
-            $idCarrier = (int) ($row['id_carrier'] ?? 0);
-            if ($idCarrier <= 0) {
+        $carrierIds = $this->extractCarrierIds($rows);
+
+        foreach ($carrierIds as $idCarrier) {
+            $carrier = new \Carrier($idCarrier);
+            if (!\Validate::isLoadedObject($carrier)) {
                 continue;
             }
 
-            $carrier = new \Carrier($idCarrier);
-            if (\Validate::isLoadedObject($carrier)) {
-                $carrier->deleted = 1;
-                $carrier->update();
+            $carrier->deleted = 1;
+            if (!$carrier->update()) {
+                return false;
             }
         }
 
@@ -67,10 +70,22 @@ class Uninstaller
         return (int) \Configuration::get(\Bookurier::CONFIG_CARRIER_REFERENCE);
     }
 
+    private function extractCarrierIds(array $rows)
+    {
+        $carrierIds = array();
+
+        foreach ($rows as $row) {
+            $idCarrier = (int) ($row['id_carrier'] ?? 0);
+            if ($idCarrier > 0) {
+                $carrierIds[] = $idCarrier;
+            }
+        }
+
+        return array_values(array_unique($carrierIds));
+    }
+
     private function uninstallDatabase()
     {
-        $table = _DB_PREFIX_ . 'bookurier_sameday_locker';
-
-        return \Db::getInstance()->execute('DROP TABLE IF EXISTS `' . $table . '`');
+        return SamedayLockerStorage::dropTable();
     }
 }
