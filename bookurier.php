@@ -9,6 +9,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Bookurier\Admin\Config\ConfigFormManager;
 use Bookurier\Client\Bookurier\BookurierClient;
 use Bookurier\Client\Sameday\SamedayClient;
+use Bookurier\Install\Installer;
+use Bookurier\Install\Uninstaller;
 use Bookurier\Logging\LoggerFactory;
 
 class Bookurier extends CarrierModule
@@ -25,6 +27,7 @@ class Bookurier extends CarrierModule
     const CONFIG_SAMEDAY_API_PASSWORD = 'BOOKURIER_SAMEDAY_API_PASSWORD';
     const CONFIG_SAMEDAY_PICKUP_POINT = 'BOOKURIER_SAMEDAY_PICKUP_POINT';
     const CONFIG_SAMEDAY_PICKUP_POINTS_CACHE = 'BOOKURIER_SAMEDAY_PICKUP_POINTS_CACHE';
+    const CONFIG_CARRIER_REFERENCE = 'BOOKURIER_CARRIER_REFERENCE';
 
     const ACTION_SUBMIT_CONFIG = 'submitBookurierConfig';
 
@@ -50,34 +53,17 @@ class Bookurier extends CarrierModule
 
     public function install()
     {
-        return parent::install()
-            && $this->registerHook('displayBackOfficeHeader')
-            && $this->registerHook('actionAdminControllerSetMedia')
-            && Configuration::updateValue(self::CONFIG_LOG_LEVEL, 'info')
-            && Configuration::updateValue(self::CONFIG_SAMEDAY_ENV, 'demo')
-            && Configuration::updateValue(self::CONFIG_DEFAULT_SERVICE, '9')
-            && Configuration::updateValue(self::CONFIG_SAMEDAY_ENABLED, '0')
-            && Configuration::updateValue(self::CONFIG_SAMEDAY_PICKUP_POINT, '0')
-            && Configuration::updateValue(self::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE, '[]');
+        if (!parent::install()) {
+            return false;
+        }
+
+        return (new Installer($this))->install();
     }
 
     public function uninstall()
     {
-        foreach (array(
-            self::CONFIG_LOG_LEVEL,
-            self::CONFIG_SAMEDAY_ENV,
-            self::CONFIG_API_USER,
-            self::CONFIG_API_PASSWORD,
-            self::CONFIG_API_KEY,
-            self::CONFIG_DEFAULT_PICKUP_POINT,
-            self::CONFIG_DEFAULT_SERVICE,
-            self::CONFIG_SAMEDAY_ENABLED,
-            self::CONFIG_SAMEDAY_API_USERNAME,
-            self::CONFIG_SAMEDAY_API_PASSWORD,
-            self::CONFIG_SAMEDAY_PICKUP_POINT,
-            self::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE,
-        ) as $configKey) {
-            Configuration::deleteByName($configKey);
+        if (!(new Uninstaller())->uninstall()) {
+            return false;
         }
 
         return parent::uninstall();
