@@ -28,7 +28,7 @@ class Uninstaller
             \Configuration::deleteByName($configKey);
         }
 
-        return true;
+        return $this->uninstallDatabase();
     }
 
     private function uninstallCarrier()
@@ -65,5 +65,12 @@ class Uninstaller
     private function getCarrierReference()
     {
         return (int) \Configuration::get(\Bookurier::CONFIG_CARRIER_REFERENCE);
+    }
+
+    private function uninstallDatabase()
+    {
+        $table = _DB_PREFIX_ . 'bookurier_sameday_locker';
+
+        return \Db::getInstance()->execute('DROP TABLE IF EXISTS `' . $table . '`');
     }
 }

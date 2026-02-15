@@ -15,6 +15,7 @@ class Installer
     {
         return $this->registerHooks()
             && $this->installCarrier()
+            && $this->installDatabase()
             && $this->installConfiguration();
     }
 
@@ -32,6 +33,33 @@ class Installer
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENABLED, '0')
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINT, '0')
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE, '[]');
+    }
+
+    private function installDatabase()
+    {
+        $table = _DB_PREFIX_ . 'bookurier_sameday_locker';
+        $sql = 'CREATE TABLE IF NOT EXISTS `' . $table . '` (
+            `id_bookurier_sameday_locker` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `locker_id` INT UNSIGNED NOT NULL,
+            `name` VARCHAR(255) NOT NULL DEFAULT \'\',
+            `county` VARCHAR(191) NOT NULL DEFAULT \'\',
+            `city` VARCHAR(191) NOT NULL DEFAULT \'\',
+            `address` VARCHAR(255) NOT NULL DEFAULT \'\',
+            `postal_code` VARCHAR(32) NOT NULL DEFAULT \'\',
+            `lat` VARCHAR(32) NOT NULL DEFAULT \'\',
+            `lng` VARCHAR(32) NOT NULL DEFAULT \'\',
+            `country_code` VARCHAR(8) NOT NULL DEFAULT \'\',
+            `is_active` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
+            `updated_at` DATETIME NOT NULL,
+            `created_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id_bookurier_sameday_locker`),
+            UNIQUE KEY `uniq_locker_id` (`locker_id`),
+            KEY `idx_city` (`city`),
+            KEY `idx_county` (`county`),
+            KEY `idx_active` (`is_active`)
+        ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
+
+        return \Db::getInstance()->execute($sql);
     }
 
     private function installCarrier()

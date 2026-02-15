@@ -21,6 +21,8 @@ class ConfigFormManager
             $output .= $this->processConfigForm();
         }
 
+        $output .= $this->renderLockerImportWarning();
+
         return $output . $this->renderConfigForm();
     }
 
@@ -347,6 +349,35 @@ class ConfigFormManager
             array('id' => 8, 'name' => 'National Economic (8)'),
             array('id' => 9, 'name' => 'National 24 (9)'),
             array('id' => 11, 'name' => 'National Premium (11)'),
+        );
+    }
+
+    private function renderLockerImportWarning()
+    {
+        if ((int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) !== 1) {
+            return '';
+        }
+
+        if ($this->getSamedayLockerCount() > 0) {
+            return '';
+        }
+
+        return $this->module->displayWarning(
+            $this->t('No SameDay lockers are imported yet. Locker checkout selection will not be available until lockers are synced.')
+        );
+    }
+
+    private function getSamedayLockerCount()
+    {
+        $table = _DB_PREFIX_ . 'bookurier_sameday_locker';
+        $existingTable = (string) \Db::getInstance()->getValue("SHOW TABLES LIKE '" . pSQL($table) . "'");
+
+        if ($existingTable === '') {
+            return 0;
+        }
+
+        return (int) \Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . $table . '` WHERE `is_active` = 1'
         );
     }
 
