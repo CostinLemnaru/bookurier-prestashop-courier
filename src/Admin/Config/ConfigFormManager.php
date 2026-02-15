@@ -8,16 +8,24 @@ class ConfigFormManager
 {
     private $module;
 
+    private $lockerRepository;
+
+    private $lockerSyncService;
+
     public function __construct($module)
     {
         $this->module = $module;
+        $this->lockerRepository = new SamedayLockerRepository();
+        $this->lockerSyncService = new SamedayLockerSyncService($module, $this->lockerRepository);
     }
 
     public function handle()
     {
         $output = '';
 
-        if (\Tools::isSubmit(\Bookurier::ACTION_SUBMIT_CONFIG)) {
+        if (\Tools::isSubmit(\Bookurier::ACTION_SYNC_LOCKERS)) {
+            $output .= $this->processLockerSync();
+        } elseif (\Tools::isSubmit(\Bookurier::ACTION_SUBMIT_CONFIG)) {
             $output .= $this->processConfigForm();
         }
 
@@ -99,6 +107,43 @@ class ConfigFormManager
         $this->module->resetClients();
 
         return $this->module->displayConfirmation($this->t('Settings saved successfully.'));
+    }
+
+    private function processLockerSync()
+    {
+        if ((int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) !== 1) {
+            return $this->module->displayError(
+                $this->t('Enable SameDay before syncing lockers.')
+            );
+        }
+
+        if (!$this->lockerRepository->ensureTable()) {
+            return $this->module->displayError(
+                $this->t('Locker storage could not be initialized.')
+            );
+        }
+
+        $username = trim((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_API_USERNAME));
+        $password = trim((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_API_PASSWORD));
+        $environment = $this->normalizeSamedayEnvironment((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENV));
+
+        if ($username === '' || $password === '') {
+            return $this->module->displayError(
+                $this->t('SameDay API credentials are required for locker sync.')
+            );
+        }
+
+        try {
+            $syncedCount = $this->lockerSyncService->sync($username, $password, $environment);
+        } catch (\Exception $e) {
+            return $this->module->displayError(
+                $this->t('SameDay lockers could not be synced: ') . $e->getMessage()
+            );
+        }
+
+        return $this->module->displayConfirmation(
+            sprintf($this->t('SameDay lockers synced successfully. Active lockers: %d'), (int) $syncedCount)
+        );
     }
 
     private function renderConfigForm()
@@ -186,6 +231,11 @@ class ConfigFormManager
                             'name' => 'name',
                         ),
                         'desc' => $this->t('List is refreshed from SameDay when you save settings and SameDay is enabled.'),
+                    ),
+                    array(
+                        'type' => 'html',
+                        'name' => 'sameday_lockers_sync',
+                        'html_content' => '<div class="bookurier-sameday-sync"><button type="submit" class="btn btn-default" name="' . \Bookurier::ACTION_SYNC_LOCKERS . '" value="1"><i class="process-icon-refresh"></i> ' . $this->t('Sync SameDay Lockers') . '</button></div>',
                     ),
                 ),
                 'submit' => array('title' => $this->t('Save')),
@@ -369,16 +419,7 @@ class ConfigFormManager
 
     private function getSamedayLockerCount()
     {
-        $table = _DB_PREFIX_ . 'bookurier_sameday_locker';
-        $existingTable = (string) \Db::getInstance()->getValue("SHOW TABLES LIKE '" . pSQL($table) . "'");
-
-        if ($existingTable === '') {
-            return 0;
-        }
-
-        return (int) \Db::getInstance()->getValue(
-            'SELECT COUNT(*) FROM `' . $table . '` WHERE `is_active` = 1'
-        );
+        return $this->lockerRepository->countActive();
     }
 
     private function t($message)

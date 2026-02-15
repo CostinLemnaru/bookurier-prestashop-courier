@@ -30,6 +30,7 @@ class Bookurier extends CarrierModule
     const CONFIG_CARRIER_REFERENCE = 'BOOKURIER_CARRIER_REFERENCE';
 
     const ACTION_SUBMIT_CONFIG = 'submitBookurierConfig';
+    const ACTION_SYNC_LOCKERS = 'submitBookurierSyncLockers';
 
     private $logger;
     private $bookurierClient;

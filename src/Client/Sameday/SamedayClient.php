@@ -303,6 +303,8 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
     {
         return array(
             'page' => (int) $page,
+            // SameDay API expects countPerPage; keep perPage for compatibility.
+            'countPerPage' => (int) $perPage,
             'perPage' => (int) $perPage,
         );
     }
