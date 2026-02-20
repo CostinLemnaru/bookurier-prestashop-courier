@@ -3,6 +3,7 @@
 namespace Bookurier\Install;
 
 use Bookurier\Install\SamedayLockerStorage;
+use Bookurier\Install\SamedayLockerSelectionStorage;
 
 class Uninstaller
 {
@@ -25,6 +26,7 @@ class Uninstaller
             \Bookurier::CONFIG_SAMEDAY_API_PASSWORD,
             \Bookurier::CONFIG_SAMEDAY_PICKUP_POINT,
             \Bookurier::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE,
+            \Bookurier::CONFIG_BOOKURIER_CARRIER_REFERENCE,
             \Bookurier::CONFIG_CARRIER_REFERENCE,
         ) as $configKey) {
             \Configuration::deleteByName($configKey);
@@ -35,7 +37,13 @@ class Uninstaller
 
     private function uninstallCarrier()
     {
-        $idReference = $this->getCarrierReference();
+        return $this->uninstallCarrierByConfigKey(\Bookurier::CONFIG_BOOKURIER_CARRIER_REFERENCE)
+            && $this->uninstallCarrierByConfigKey(\Bookurier::CONFIG_CARRIER_REFERENCE);
+    }
+
+    private function uninstallCarrierByConfigKey($configKey)
+    {
+        $idReference = (int) \Configuration::get($configKey);
         if ($idReference <= 0) {
             return true;
         }
@@ -65,11 +73,6 @@ class Uninstaller
         return true;
     }
 
-    private function getCarrierReference()
-    {
-        return (int) \Configuration::get(\Bookurier::CONFIG_CARRIER_REFERENCE);
-    }
-
     private function extractCarrierIds(array $rows)
     {
         $carrierIds = array();
@@ -86,6 +89,7 @@ class Uninstaller
 
     private function uninstallDatabase()
     {
-        return SamedayLockerStorage::dropTable();
+        return SamedayLockerSelectionStorage::dropTable()
+            && SamedayLockerStorage::dropTable();
     }
 }

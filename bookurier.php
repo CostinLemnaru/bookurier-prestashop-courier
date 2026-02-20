@@ -7,8 +7,11 @@ if (!defined('_PS_VERSION_')) {
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Bookurier\Admin\Config\ConfigFormManager;
+use Bookurier\Admin\Config\SamedayLockerRepository;
 use Bookurier\Client\Bookurier\BookurierClient;
 use Bookurier\Client\Sameday\SamedayClient;
+use Bookurier\Checkout\SamedayLockerCheckoutHelper;
+use Bookurier\Checkout\SamedayLockerSelectionRepository;
 use Bookurier\Install\Installer;
 use Bookurier\Install\Uninstaller;
 use Bookurier\Logging\LoggerFactory;
@@ -27,6 +30,7 @@ class Bookurier extends CarrierModule
     const CONFIG_SAMEDAY_API_PASSWORD = 'BOOKURIER_SAMEDAY_API_PASSWORD';
     const CONFIG_SAMEDAY_PICKUP_POINT = 'BOOKURIER_SAMEDAY_PICKUP_POINT';
     const CONFIG_SAMEDAY_PICKUP_POINTS_CACHE = 'BOOKURIER_SAMEDAY_PICKUP_POINTS_CACHE';
+    const CONFIG_BOOKURIER_CARRIER_REFERENCE = 'BOOKURIER_BOOKURIER_CARRIER_REFERENCE';
     const CONFIG_CARRIER_REFERENCE = 'BOOKURIER_CARRIER_REFERENCE';
 
     const ACTION_SUBMIT_CONFIG = 'submitBookurierConfig';
@@ -89,14 +93,99 @@ class Bookurier extends CarrierModule
         $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
     }
 
+    public function hookActionFrontControllerSetMedia($params)
+    {
+        if (!$this->isSamedayCheckoutEnabled()) {
+            return;
+        }
+
+        $phpSelf = isset($this->context->controller->php_self) ? (string) $this->context->controller->php_self : '';
+        if (!in_array($phpSelf, array('order', 'checkout'), true)) {
+            return;
+        }
+
+        $this->context->controller->registerStylesheet(
+            'bookurier-tomselect',
+            'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css',
+            array('server' => 'remote', 'priority' => 150)
+        );
+
+        $this->context->controller->registerJavascript(
+            'bookurier-tomselect',
+            'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js',
+            array('server' => 'remote', 'position' => 'bottom', 'priority' => 150)
+        );
+
+        $this->context->controller->addJS($this->_path . 'views/js/checkout-locker.js');
+    }
+
+    public function hookDisplayCarrierExtraContent($params)
+    {
+        if (!$this->isSamedayCheckoutEnabled()) {
+            return '';
+        }
+
+        $checkoutHelper = new SamedayLockerCheckoutHelper();
+        if (!$checkoutHelper->isLockerCarrierSelected($params, $this->context, (int) Configuration::get(self::CONFIG_CARRIER_REFERENCE))) {
+            return '';
+        }
+
+        $idCart = (int) $this->context->cart->id;
+        if ($idCart <= 0) {
+            return '';
+        }
+
+        $lockerRepository = new SamedayLockerRepository();
+        $lockers = $lockerRepository->getActiveForCheckout();
+        if (empty($lockers)) {
+            return '<p class="alert alert-warning">' . $this->l('No SameDay lockers available. Please contact the store administrator.') . '</p>';
+        }
+
+        $selectionRepository = new SamedayLockerSelectionRepository();
+        $selectedLockerId = $selectionRepository->getLockerIdByCart($idCart);
+        if ($selectedLockerId <= 0) {
+            $selectedLockerId = $checkoutHelper->resolvePreferredLockerByDeliveryAddress($this->context, $lockerRepository, $lockers);
+            if ($selectedLockerId > 0) {
+                $selectionRepository->saveForCart($idCart, $selectedLockerId);
+            }
+        }
+        $saveUrl = $this->context->link->getModuleLink($this->name, 'locker');
+
+        $this->context->smarty->assign(array(
+            'bookurier_locker_save_url' => $saveUrl,
+            'bookurier_lockers' => $lockers,
+            'bookurier_selected_locker_id' => $selectedLockerId,
+        ));
+
+        return $this->fetch('module:' . $this->name . '/views/templates/hook/carrier_extra.tpl');
+    }
+
+    public function hookActionValidateOrder($params)
+    {
+        if (!isset($params['cart']) || !isset($params['order'])) {
+            return;
+        }
+
+        $cart = $params['cart'];
+        $order = $params['order'];
+        $idCart = (int) (is_object($cart) ? $cart->id : 0);
+        $idOrder = (int) (is_object($order) ? $order->id : 0);
+        if ($idCart <= 0 || $idOrder <= 0) {
+            return;
+        }
+
+        $selectionRepository = new SamedayLockerSelectionRepository();
+        $selectionRepository->assignOrder($idCart, $idOrder);
+    }
+
     public function getOrderShippingCost($params, $shipping_cost)
     {
-        return false;
+        return 0.0;
     }
 
     public function getOrderShippingCostExternal($params)
     {
-        return false;
+        return 0.0;
     }
 
     public function resetClients()
@@ -143,5 +232,10 @@ class Bookurier extends CarrierModule
         }
 
         return $this->samedayClient;
+    }
+
+    private function isSamedayCheckoutEnabled()
+    {
+        return (int) Configuration::get(self::CONFIG_SAMEDAY_ENABLED) === 1;
     }
 }

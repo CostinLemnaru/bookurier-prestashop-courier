@@ -85,6 +85,125 @@ class SamedayLockerRepository
         return count($activeLockerIds);
     }
 
+    public function getActiveForCheckout()
+    {
+        if (!$this->ensureTable()) {
+            return array();
+        }
+
+        $rows = \Db::getInstance()->executeS(
+            'SELECT locker_id, name, city, county, address, postal_code'
+            . ' FROM `' . $this->getTableName() . '`'
+            . ' WHERE is_active = 1'
+            . ' ORDER BY city ASC, name ASC'
+        );
+
+        if (!is_array($rows)) {
+            return array();
+        }
+
+        $lockers = array();
+        foreach ($rows as $row) {
+            $lockerId = (int) ($row['locker_id'] ?? 0);
+            if ($lockerId <= 0) {
+                continue;
+            }
+
+            $name = trim((string) ($row['name'] ?? ''));
+            $city = trim((string) ($row['city'] ?? ''));
+            $county = trim((string) ($row['county'] ?? ''));
+            $address = trim((string) ($row['address'] ?? ''));
+            $postalCode = trim((string) ($row['postal_code'] ?? ''));
+            $label = $name !== '' ? $name : ('Locker #' . $lockerId);
+            $details = trim(
+                $city
+                . ($county !== '' ? ', ' . $county : '')
+                . ($postalCode !== '' ? ' ' . $postalCode : '')
+                . ($address !== '' ? ' - ' . $address : '')
+            );
+
+            $lockers[] = array(
+                'locker_id' => $lockerId,
+                'label' => $label . ($details !== '' ? ' (' . $details . ')' : ''),
+                'city' => $city,
+                'county' => $county,
+                'address' => $address,
+                'postal_code' => $postalCode,
+                'search_text' => strtolower(trim($label . ' ' . $details)),
+            );
+        }
+
+        return $lockers;
+    }
+
+    public function isActiveLockerId($lockerId)
+    {
+        $lockerId = (int) $lockerId;
+        if ($lockerId <= 0 || !$this->ensureTable()) {
+            return false;
+        }
+
+        return (int) \Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . $this->getTableName() . '` WHERE locker_id = ' . (int) $lockerId . ' AND is_active = 1'
+        ) > 0;
+    }
+
+    public function findBestLockerIdForAddress($deliveryAddress, array $lockers)
+    {
+        if (!is_object($deliveryAddress) || empty($lockers)) {
+            return 0;
+        }
+
+        $city = $this->normalizeText((string) ($deliveryAddress->city ?? ''));
+        $postcode = $this->normalizeText((string) ($deliveryAddress->postcode ?? ''));
+        $street = $this->normalizeText(trim((string) ($deliveryAddress->address1 ?? '') . ' ' . (string) ($deliveryAddress->address2 ?? '')));
+
+        $bestLockerId = 0;
+        $bestScore = -1;
+
+        foreach ($lockers as $locker) {
+            if (!is_array($locker)) {
+                continue;
+            }
+
+            $lockerId = (int) ($locker['locker_id'] ?? 0);
+            if ($lockerId <= 0) {
+                continue;
+            }
+
+            $score = 0;
+            $lockerCity = $this->normalizeText((string) ($locker['city'] ?? ''));
+            $lockerCounty = $this->normalizeText((string) ($locker['county'] ?? ''));
+            $lockerAddress = $this->normalizeText((string) ($locker['address'] ?? ''));
+            $lockerPostcode = $this->normalizeText((string) ($locker['postal_code'] ?? ''));
+
+            if ($city !== '' && $lockerCity === $city) {
+                $score += 100;
+            }
+            if ($postcode !== '' && $lockerPostcode !== '' && $lockerPostcode === $postcode) {
+                $score += 60;
+            }
+            if ($street !== '' && $lockerAddress !== '' && strpos($lockerAddress, $street) !== false) {
+                $score += 40;
+            }
+            if ($city !== '' && $lockerCounty !== '' && strpos($lockerCounty, $city) !== false) {
+                $score += 5;
+            }
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestLockerId = $lockerId;
+            }
+        }
+
+        return $bestScore > 0 ? $bestLockerId : 0;
+    }
+
+    private function normalizeText($value)
+    {
+        return strtolower(trim((string) $value));
+    }
+
     private function getTableName()
     {
         return SamedayLockerStorage::getPrefixedTableName();

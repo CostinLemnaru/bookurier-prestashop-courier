@@ -2,14 +2,22 @@
 
 namespace Bookurier\Install;
 
+use Bookurier\Install\SamedayLockerSelectionStorage;
 use Bookurier\Install\SamedayLockerStorage;
 
 class Installer
 {
-    const CARRIER_MAX_WEIGHT = 100000;
-    const CARRIER_MAX_WIDTH = 1000;
-    const CARRIER_MAX_HEIGHT = 1000;
-    const CARRIER_MAX_DEPTH = 1000;
+    const BOOKURIER_MAX_WEIGHT = 100000;
+    const BOOKURIER_MAX_WIDTH = 1000;
+    const BOOKURIER_MAX_HEIGHT = 1000;
+    const BOOKURIER_MAX_DEPTH = 1000;
+    const BOOKURIER_RANGE_MAX_WEIGHT = 100000;
+
+    const LOCKER_MAX_WEIGHT = 20;
+    const LOCKER_MAX_WIDTH = 200;
+    const LOCKER_MAX_HEIGHT = 100;
+    const LOCKER_MAX_DEPTH = 100;
+    const LOCKER_RANGE_MAX_WEIGHT = 20;
 
     private $module;
 
@@ -29,7 +37,10 @@ class Installer
     private function registerHooks()
     {
         return $this->module->registerHook('displayBackOfficeHeader')
-            && $this->module->registerHook('actionAdminControllerSetMedia');
+            && $this->module->registerHook('actionAdminControllerSetMedia')
+            && $this->module->registerHook('actionFrontControllerSetMedia')
+            && $this->module->registerHook('displayCarrierExtraContent')
+            && $this->module->registerHook('actionValidateOrder');
     }
 
     private function installConfiguration()
@@ -44,24 +55,99 @@ class Installer
 
     private function installDatabase()
     {
-        return SamedayLockerStorage::ensureTable();
+        return SamedayLockerStorage::ensureTable()
+            && SamedayLockerSelectionStorage::ensureTable();
     }
 
     private function installCarrier()
     {
-        $idReference = $this->getCarrierReference();
-        if ($idReference > 0) {
-            $idCarrier = (int) \Carrier::getCarrierByReference($idReference);
-            if ($idCarrier > 0) {
-                $carrier = new \Carrier($idCarrier);
-                if (\Validate::isLoadedObject($carrier) && (int) $carrier->deleted === 0) {
-                    return $this->applyCarrierLimits($carrier);
+        return $this->installSingleCarrier(
+            \Bookurier::CONFIG_BOOKURIER_CARRIER_REFERENCE,
+            array(
+                'name' => 'Bookurier',
+                'delay' => 'Bookurier courier',
+                'max_weight' => self::BOOKURIER_MAX_WEIGHT,
+                'max_width' => self::BOOKURIER_MAX_WIDTH,
+                'max_height' => self::BOOKURIER_MAX_HEIGHT,
+                'max_depth' => self::BOOKURIER_MAX_DEPTH,
+                'range_max_weight' => self::BOOKURIER_RANGE_MAX_WEIGHT,
+            )
+        ) && $this->installSingleCarrier(
+            \Bookurier::CONFIG_CARRIER_REFERENCE,
+            array(
+                'name' => 'Sameday Locker',
+                'delay' => 'Sameday locker delivery',
+                'max_weight' => self::LOCKER_MAX_WEIGHT,
+                'max_width' => self::LOCKER_MAX_WIDTH,
+                'max_height' => self::LOCKER_MAX_HEIGHT,
+                'max_depth' => self::LOCKER_MAX_DEPTH,
+                'range_max_weight' => self::LOCKER_RANGE_MAX_WEIGHT,
+            )
+        );
+    }
+
+    private function installSingleCarrier($configKey, array $profile)
+    {
+        $carrier = $this->getActiveCarrierByReference((int) \Configuration::get($configKey));
+
+        if ($carrier === null) {
+            $carrier = new \Carrier();
+            $this->populateCarrier($carrier, $profile);
+
+            if (!$carrier->add()) {
+                return false;
+            }
+
+            $carrierReference = (int) $carrier->id_reference;
+            if ($carrierReference <= 0) {
+                $carrierReference = (int) $carrier->id;
+                $carrier->id_reference = $carrierReference;
+                if (!$carrier->update()) {
+                    return false;
                 }
+            }
+
+            if (!\Configuration::updateValue($configKey, (string) $carrierReference)) {
+                return false;
+            }
+        } else {
+            $this->populateCarrier($carrier, $profile);
+            if (!$carrier->update()) {
+                return false;
+            }
+
+            if (!\Configuration::updateValue($configKey, (string) $carrier->id_reference)) {
+                return false;
             }
         }
 
-        $carrier = new \Carrier();
-        $carrier->name = 'Bookurier';
+        return $this->syncCarrierGroups($carrier)
+            && $this->syncCarrierZonesAndDelivery($carrier, (float) $profile['range_max_weight']);
+    }
+
+    private function getActiveCarrierByReference($idReference)
+    {
+        $idReference = (int) $idReference;
+        if ($idReference <= 0) {
+            return null;
+        }
+
+        $idCarrier = (int) \Carrier::getCarrierByReference($idReference);
+        if ($idCarrier <= 0) {
+            return null;
+        }
+
+        $carrier = new \Carrier($idCarrier);
+        if (!\Validate::isLoadedObject($carrier) || (int) $carrier->deleted !== 0) {
+            return null;
+        }
+
+        return $carrier;
+    }
+
+    private function populateCarrier(\Carrier $carrier, array $profile)
+    {
+        $carrier->name = (string) $profile['name'];
         $carrier->active = true;
         $carrier->deleted = 0;
         $carrier->is_module = true;
@@ -71,95 +157,115 @@ class Installer
         $carrier->need_range = true;
         $carrier->shipping_method = \Carrier::SHIPPING_METHOD_WEIGHT;
         $carrier->range_behavior = 0;
-        $carrier->max_weight = self::CARRIER_MAX_WEIGHT;
-        $carrier->max_width = self::CARRIER_MAX_WIDTH;
-        $carrier->max_height = self::CARRIER_MAX_HEIGHT;
-        $carrier->max_depth = self::CARRIER_MAX_DEPTH;
+        $carrier->max_weight = (float) $profile['max_weight'];
+        $carrier->max_width = (float) $profile['max_width'];
+        $carrier->max_height = (float) $profile['max_height'];
+        $carrier->max_depth = (float) $profile['max_depth'];
         $carrier->delay = array();
 
         foreach (\Language::getLanguages(false) as $language) {
-            $carrier->delay[(int) $language['id_lang']] = 'Bookurier courier';
+            $carrier->delay[(int) $language['id_lang']] = (string) $profile['delay'];
         }
+    }
 
-        if (!$carrier->add()) {
+    private function syncCarrierGroups(\Carrier $carrier)
+    {
+        $idCarrier = (int) $carrier->id;
+        if ($idCarrier <= 0) {
             return false;
         }
 
-        $carrierReference = (int) $carrier->id_reference;
-        if ($carrierReference <= 0) {
-            $carrierReference = (int) $carrier->id;
-            $carrier->id_reference = $carrierReference;
-            if (!$carrier->update()) {
-                return false;
-            }
-        }
-
-        if (!\Configuration::updateValue(\Bookurier::CONFIG_CARRIER_REFERENCE, (string) $carrierReference)) {
+        $db = \Db::getInstance();
+        if (!$db->delete('carrier_group', 'id_carrier = ' . $idCarrier)) {
             return false;
-        }
-
-        $zones = \Zone::getZones(true);
-        foreach ($zones as $zone) {
-            $carrier->addZone((int) $zone['id_zone']);
         }
 
         $groups = \Group::getGroups((int) \Configuration::get('PS_LANG_DEFAULT'));
-        foreach ($groups as $group) {
-            \Db::getInstance()->insert('carrier_group', array(
-                'id_carrier' => (int) $carrier->id,
-                'id_group' => (int) $group['id_group'],
-            ));
+        if (!is_array($groups)) {
+            return false;
         }
 
-        $rangeWeight = new \RangeWeight();
-        $rangeWeight->id_carrier = (int) $carrier->id;
-        $rangeWeight->delimiter1 = 0;
-        $rangeWeight->delimiter2 = 100000;
-        $rangeWeight->add();
-
-        foreach ($zones as $zone) {
-            \Db::getInstance()->insert('delivery', array(
-                'id_carrier' => (int) $carrier->id,
-                'id_range_weight' => (int) $rangeWeight->id,
-                'id_range_price' => 0,
-                'id_zone' => (int) $zone['id_zone'],
-                'price' => '0.000000',
-            ));
+        foreach ($groups as $group) {
+            if (!$db->insert('carrier_group', array(
+                'id_carrier' => $idCarrier,
+                'id_group' => (int) $group['id_group'],
+            ))) {
+                return false;
+            }
         }
 
         return true;
     }
 
-    private function getCarrierReference()
+    private function syncCarrierZonesAndDelivery(\Carrier $carrier, $rangeMaxWeight)
     {
-        return (int) \Configuration::get(\Bookurier::CONFIG_CARRIER_REFERENCE);
+        $zoneIds = $this->getRomaniaZoneIds();
+        if (empty($zoneIds)) {
+            return false;
+        }
+
+        $idCarrier = (int) $carrier->id;
+        if ($idCarrier <= 0) {
+            return false;
+        }
+
+        $db = \Db::getInstance();
+        if (!$db->delete('carrier_zone', 'id_carrier = ' . $idCarrier)) {
+            return false;
+        }
+        if (!$db->delete('delivery', 'id_carrier = ' . $idCarrier)) {
+            return false;
+        }
+        if (!$db->delete('range_weight', 'id_carrier = ' . $idCarrier)) {
+            return false;
+        }
+
+        foreach ($zoneIds as $zoneId) {
+            if (!$carrier->addZone((int) $zoneId)) {
+                return false;
+            }
+        }
+
+        $rangeWeight = new \RangeWeight();
+        $rangeWeight->id_carrier = $idCarrier;
+        $rangeWeight->delimiter1 = 0;
+        $rangeWeight->delimiter2 = (float) $rangeMaxWeight;
+        if (!$rangeWeight->add()) {
+            return false;
+        }
+
+        foreach ($zoneIds as $zoneId) {
+            if (!$db->insert('delivery', array(
+                'id_carrier' => $idCarrier,
+                'id_range_weight' => (int) $rangeWeight->id,
+                'id_range_price' => 0,
+                'id_zone' => (int) $zoneId,
+                'price' => '0.000000',
+            ))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
-    private function applyCarrierLimits(\Carrier $carrier)
+    private function getRomaniaZoneIds()
     {
-        $updated = false;
-
-        if ((int) $carrier->max_weight !== self::CARRIER_MAX_WEIGHT) {
-            $carrier->max_weight = self::CARRIER_MAX_WEIGHT;
-            $updated = true;
-        }
-        if ((int) $carrier->max_width !== self::CARRIER_MAX_WIDTH) {
-            $carrier->max_width = self::CARRIER_MAX_WIDTH;
-            $updated = true;
-        }
-        if ((int) $carrier->max_height !== self::CARRIER_MAX_HEIGHT) {
-            $carrier->max_height = self::CARRIER_MAX_HEIGHT;
-            $updated = true;
-        }
-        if ((int) $carrier->max_depth !== self::CARRIER_MAX_DEPTH) {
-            $carrier->max_depth = self::CARRIER_MAX_DEPTH;
-            $updated = true;
+        $idCountry = (int) \Country::getByIso('RO');
+        if ($idCountry <= 0) {
+            return array();
         }
 
-        if (!$updated) {
-            return true;
+        $country = new \Country($idCountry);
+        if (!\Validate::isLoadedObject($country)) {
+            return array();
         }
 
-        return $carrier->update();
+        $idZone = (int) $country->id_zone;
+        if ($idZone <= 0) {
+            return array();
+        }
+
+        return array($idZone);
     }
 }
