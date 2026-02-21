@@ -430,6 +430,7 @@ class Bookurier extends CarrierModule
 
         $awb = (new AwbRepository())->findByOrderId($idOrder);
         $hasAwb = is_array($awb) && trim((string) ($awb['awb_code'] ?? '')) !== '';
+        $awbStatus = is_array($awb) ? $this->resolveAwbStatusLabel($awb) : '';
 
         $this->renderedAdminAwbOrderId = $idOrder;
         $manualGenerateUrl = (!$this->isAutoAwbEnabled() && !$hasAwb) ? $this->buildAwbGenerateUrl($idOrder) : '';
@@ -438,6 +439,8 @@ class Bookurier extends CarrierModule
             'bookurier_awb_title' => $this->l('Bookurier AWB'),
             'bookurier_awb_code_label' => $this->l('AWB'),
             'bookurier_awb_code' => $hasAwb ? (string) $awb['awb_code'] : '',
+            'bookurier_awb_status_label' => $this->l('Status'),
+            'bookurier_awb_status' => $awbStatus,
             'bookurier_awb_empty_label' => $this->l('AWB not generated yet.'),
             'bookurier_awb_download_label' => $this->l('Download AWB PDF'),
             'bookurier_awb_download_url' => $hasAwb ? $this->buildAwbDownloadUrl($idOrder) : '',
@@ -497,6 +500,89 @@ class Bookurier extends CarrierModule
     private function buildAwbGenerateToken($idOrder)
     {
         return hash_hmac('sha256', 'generate|' . (string) (int) $idOrder, _COOKIE_KEY_);
+    }
+
+    private function resolveAwbStatusLabel(array $awb)
+    {
+        $storedStatus = $this->formatStoredAwbStatus((string) ($awb['status'] ?? ''));
+        $courier = strtolower(trim((string) ($awb['courier'] ?? '')));
+        $awbCode = trim((string) ($awb['awb_code'] ?? ''));
+        if ($awbCode === '') {
+            return $storedStatus;
+        }
+
+        try {
+            if ($courier === 'sameday') {
+                $payload = $this->getSamedayClient()->getAwbStatus($awbCode);
+                $expeditionStatus = isset($payload['expeditionStatus']) && is_array($payload['expeditionStatus'])
+                    ? $payload['expeditionStatus']
+                    : array();
+                $status = trim((string) ($expeditionStatus['statusLabel'] ?? $expeditionStatus['status'] ?? ''));
+                if ($status !== '') {
+                    return $status;
+                }
+            }
+
+            if ($courier === 'bookurier') {
+                $apiKey = trim((string) Configuration::get(self::CONFIG_API_KEY));
+                if ($apiKey !== '') {
+                    $payload = $this->getBookurierClient()->getAwbHistory($apiKey, $awbCode);
+                    $status = $this->normalizeAwbStatusText((string) ($payload['status_name'] ?? ''));
+                    if ($status === '' && isset($payload['data']) && is_array($payload['data']) && !empty($payload['data'])) {
+                        $historyPayload = $payload['data'];
+                        if (isset($historyPayload['status_name']) || isset($historyPayload['status']) || isset($historyPayload['statusLabel'])) {
+                            $status = $this->normalizeAwbStatusText((string) (
+                                $historyPayload['status_name']
+                                ?? $historyPayload['status']
+                                ?? $historyPayload['statusLabel']
+                                ?? ''
+                            ));
+                        } else {
+                            $lastStatus = end($historyPayload);
+                            if (is_array($lastStatus)) {
+                                $status = $this->normalizeAwbStatusText((string) (
+                                    $lastStatus['status_name']
+                                    ?? $lastStatus['status']
+                                    ?? $lastStatus['statusLabel']
+                                    ?? ''
+                                ));
+                            }
+                        }
+                    }
+                    if ($status !== '') {
+                        return $status;
+                    }
+                }
+            }
+        } catch (\Exception $exception) {
+            $this->getLogger()->warning('Could not fetch AWB status for BO panel.', array(
+                'id_order' => (int) ($awb['id_order'] ?? 0),
+                'courier' => $courier,
+                'awb_code' => $awbCode,
+                'message' => $exception->getMessage(),
+            ));
+        }
+
+        return $storedStatus;
+    }
+
+    private function formatStoredAwbStatus($status)
+    {
+        $status = strtolower(trim((string) $status));
+        if ($status === 'created') {
+            return $this->l('Created');
+        }
+
+        if ($status === 'error') {
+            return $this->l('Error');
+        }
+
+        return $status !== '' ? ucfirst($status) : '';
+    }
+
+    private function normalizeAwbStatusText($status)
+    {
+        return trim((string) preg_replace('/\s+/', ' ', (string) $status));
     }
 
     private function parseStatusIds($rawValue)

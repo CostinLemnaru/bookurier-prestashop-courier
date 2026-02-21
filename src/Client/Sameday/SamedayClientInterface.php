@@ -67,6 +67,15 @@ interface SamedayClientInterface
     public function createAwb(CreateAwbRequestDto $request): CreateAwbResponseDto;
 
     /**
+     * Read current AWB status payload.
+     *
+     * @param string $awbNumber
+     *
+     * @return array<string, mixed>
+     */
+    public function getAwbStatus(string $awbNumber): array;
+
+    /**
      * Download AWB label PDF.
      *
      * @param string $awbNumber

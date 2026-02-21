@@ -167,6 +167,29 @@ class BookurierClient extends AbstractApiClient implements BookurierClientInterf
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * @throws ApiException
+     */
+    public function getAwbHistory($apiKey, $awbCode)
+    {
+        $apiKey = trim((string) $apiKey);
+        $awbCode = trim((string) $awbCode);
+        if ($apiKey === '' || $awbCode === '') {
+            throw new ApiException('Bookurier AWB history requires both api key and awb code.');
+        }
+
+        $response = $this->requestOrFail('Bookurier', 'GET', $this->buildUrl('awb_history.php'), array(
+            'query' => array(
+                'key' => $apiKey,
+                'awb' => $awbCode,
+            ),
+        ));
+
+        return $this->decodeJsonOrFail('Bookurier', $response, 'awb_history.php');
+    }
+
+    /**
      * @return void
      *
      * @throws ApiException

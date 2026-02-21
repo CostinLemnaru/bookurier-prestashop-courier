@@ -8,6 +8,12 @@
         <strong>{$bookurier_awb_code_label|escape:'html':'UTF-8'}:</strong>
         {$bookurier_awb_code|escape:'html':'UTF-8'}
       </p>
+      {if !empty($bookurier_awb_status)}
+        <p>
+          <strong>{$bookurier_awb_status_label|escape:'html':'UTF-8'}:</strong>
+          {$bookurier_awb_status|escape:'html':'UTF-8'}
+        </p>
+      {/if}
     {else}
       <p>{$bookurier_awb_empty_label|escape:'html':'UTF-8'}</p>
     {/if}

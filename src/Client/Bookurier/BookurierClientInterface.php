@@ -46,4 +46,12 @@ interface BookurierClientInterface
      * @return string
      */
     public function printAwbs(array $awbCodes, $format = 'pdf', $mode = 'm', $page = 0);
+
+    /**
+     * @param string $apiKey
+     * @param string $awbCode
+     *
+     * @return array<string, mixed>
+     */
+    public function getAwbHistory($apiKey, $awbCode);
 }
