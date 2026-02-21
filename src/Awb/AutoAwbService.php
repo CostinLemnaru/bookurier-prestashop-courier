@@ -17,6 +17,7 @@ class AutoAwbService
     private $awbRepository;
     private $lockerSelectionRepository;
     private $lockerRepository;
+    private $columnExistsCache;
 
     public function __construct(
         $module,
@@ -28,6 +29,7 @@ class AutoAwbService
         $this->awbRepository = $awbRepository ?: new AwbRepository();
         $this->lockerSelectionRepository = $lockerSelectionRepository ?: new SamedayLockerSelectionRepository();
         $this->lockerRepository = $lockerRepository ?: new SamedayLockerRepository();
+        $this->columnExistsCache = array();
     }
 
     public function generateForOrder($order, $idCart = 0, $carrierReference = 0)
@@ -42,7 +44,12 @@ class AutoAwbService
         }
 
         if ($this->awbRepository->hasCreatedAwb($idOrder)) {
-            return $this->awbRepository->findByOrderId($idOrder);
+            $existing = $this->awbRepository->findByOrderId($idOrder);
+            if (is_array($existing)) {
+                $this->syncPrestaShopTrackingNumber($order, (string) ($existing['awb_code'] ?? ''));
+            }
+
+            return $existing;
         }
 
         $idCart = (int) $idCart > 0 ? (int) $idCart : (int) $order->id_cart;
@@ -76,6 +83,8 @@ class AutoAwbService
                 $responsePayload
             );
 
+            $this->syncPrestaShopTrackingNumber($order, (string) ($result['awb_code'] ?? ''));
+
             return $this->awbRepository->findByOrderId($idOrder);
         } catch (\Exception $exception) {
             $this->awbRepository->saveError(
@@ -90,6 +99,89 @@ class AutoAwbService
 
             throw $exception;
         }
+    }
+
+    private function syncPrestaShopTrackingNumber($order, $awbCode)
+    {
+        $awbCode = trim((string) $awbCode);
+        if ($awbCode === '' || !is_object($order) || !\Validate::isLoadedObject($order)) {
+            return;
+        }
+
+        $idOrder = (int) $order->id;
+        if ($idOrder <= 0) {
+            return;
+        }
+
+        $idCarrier = (int) $order->id_carrier;
+        $db = \Db::getInstance();
+        $escapedAwb = pSQL($awbCode);
+        $ok = true;
+        $didUpdate = false;
+
+        if ($this->hasColumn('orders', 'shipping_number')) {
+            $didUpdate = true;
+            $ok = $ok && (bool) $db->update('orders', array(
+                'shipping_number' => $escapedAwb,
+            ), 'id_order = ' . $idOrder);
+        }
+
+        if ($this->hasColumn('order_carrier', 'tracking_number')) {
+            $didUpdate = true;
+            $carrierWhere = 'id_order = ' . $idOrder;
+            if ($idCarrier > 0) {
+                $carrierWhere .= ' AND id_carrier = ' . $idCarrier;
+            }
+
+            $ok = $ok && (bool) $db->update('order_carrier', array(
+                'tracking_number' => $escapedAwb,
+            ), $carrierWhere);
+        }
+
+        if (!$didUpdate) {
+            return;
+        }
+
+        if ($ok) {
+            if (property_exists($order, 'shipping_number')) {
+                $order->shipping_number = $awbCode;
+            }
+
+            return;
+        }
+
+        if (is_object($this->module) && method_exists($this->module, 'getLogger')) {
+            $this->module->getLogger()->warning('Could not sync AWB into PrestaShop tracking fields.', array(
+                'id_order' => $idOrder,
+                'id_carrier' => $idCarrier,
+                'awb_code' => $awbCode,
+            ));
+        }
+    }
+
+    private function hasColumn($baseTableName, $columnName)
+    {
+        $baseTableName = trim((string) $baseTableName);
+        $columnName = trim((string) $columnName);
+        if ($baseTableName === '' || $columnName === '') {
+            return false;
+        }
+
+        $cacheKey = $baseTableName . '.' . $columnName;
+        if (isset($this->columnExistsCache[$cacheKey])) {
+            return (bool) $this->columnExistsCache[$cacheKey];
+        }
+
+        $tableName = _DB_PREFIX_ . pSQL($baseTableName);
+        $exists = (int) \Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM information_schema.COLUMNS'
+            . ' WHERE TABLE_SCHEMA = DATABASE()'
+            . ' AND TABLE_NAME = \'' . pSQL($tableName) . '\''
+            . ' AND COLUMN_NAME = \'' . pSQL($columnName) . '\''
+        ) > 0;
+        $this->columnExistsCache[$cacheKey] = $exists;
+
+        return $exists;
     }
 
     private function resolveCourier($carrierReference)
