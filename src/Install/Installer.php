@@ -42,7 +42,9 @@ class Installer
             && $this->module->registerHook('actionFrontControllerSetMedia')
             && $this->module->registerHook('displayCarrierExtraContent')
             && $this->module->registerHook('actionValidateOrder')
-            && $this->module->registerHook('actionOrderStatusPostUpdate');
+            && $this->module->registerHook('actionOrderStatusPostUpdate')
+            && $this->module->registerHook('displayAdminOrderMain')
+            && $this->module->registerHook('displayAdminOrder');
     }
 
     private function installConfiguration()

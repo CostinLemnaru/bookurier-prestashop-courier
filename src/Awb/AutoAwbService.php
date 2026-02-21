@@ -322,7 +322,7 @@ class AutoAwbService
             'unpack' => '0',
             'exchange_pack' => '0',
             'confirmation' => '0',
-            'notes' => 'Prestashop order #' . (int) $order->id,
+            'notes' => 'Order #' . (int) $order->id,
             'ref1' => (string) $order->reference,
             'ref2' => (string) $order->id,
         );
@@ -376,7 +376,7 @@ class AutoAwbService
                 'address' => trim((string) ($locker['address'] ?? $address->address1)),
                 'email' => (string) ($customer->email ?? ''),
             ),
-            'observation' => 'Prestashop order #' . (int) $order->id,
+            'observation' => 'Order #' . (int) $order->id,
             'clientInternalReference' => 'PS-' . (int) $order->id . '-' . date('YmdHis'),
             'parcels' => array(
                 array('weight' => (float) $this->resolveOrderWeight($order)),

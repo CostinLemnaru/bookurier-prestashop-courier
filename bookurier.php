@@ -7,6 +7,7 @@ if (!defined('_PS_VERSION_')) {
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Bookurier\Awb\AutoAwbService;
+use Bookurier\Awb\AwbRepository;
 use Bookurier\Admin\Config\ConfigFormManager;
 use Bookurier\Admin\Config\SamedayLockerRepository;
 use Bookurier\Client\Bookurier\BookurierClient;
@@ -41,6 +42,7 @@ class Bookurier extends CarrierModule
     private $bookurierClient;
     private $samedayClient;
     private $autoAwbService;
+    private $renderedAdminAwbOrderId;
 
     public function __construct()
     {
@@ -51,6 +53,7 @@ class Bookurier extends CarrierModule
         $this->need_instance = 0;
         $this->bootstrap = true;
         $this->ps_versions_compliancy = array('min' => '1.7.8.0', 'max' => '9.99.99');
+        $this->renderedAdminAwbOrderId = 0;
 
         parent::__construct();
 
@@ -85,6 +88,8 @@ class Bookurier extends CarrierModule
 
     public function hookDisplayBackOfficeHeader($params)
     {
+        $this->ensureRequiredHooks();
+
         return '';
     }
 
@@ -192,6 +197,16 @@ class Bookurier extends CarrierModule
         }
 
         $this->maybeGenerateAutoAwb($order, (int) $order->id_cart);
+    }
+
+    public function hookDisplayAdminOrderMain($params)
+    {
+        return $this->renderAdminAwbLink($params);
+    }
+
+    public function hookDisplayAdminOrder($params)
+    {
+        return $this->renderAdminAwbLink($params);
     }
 
     public function getOrderShippingCost($params, $shipping_cost)
@@ -332,13 +347,73 @@ class Bookurier extends CarrierModule
         ), true);
     }
 
+    private function renderAdminAwbLink($params)
+    {
+        $idOrder = $this->resolveOrderIdFromHookParams($params);
+        if ($idOrder <= 0) {
+            return '';
+        }
+
+        if ((int) $this->renderedAdminAwbOrderId === $idOrder) {
+            return '';
+        }
+
+        $awb = (new AwbRepository())->findByOrderId($idOrder);
+        if (!is_array($awb) || trim((string) ($awb['awb_code'] ?? '')) === '') {
+            return '';
+        }
+
+        $this->renderedAdminAwbOrderId = $idOrder;
+
+        $this->context->smarty->assign(array(
+            'bookurier_awb_title' => $this->l('Bookurier AWB'),
+            'bookurier_awb_code_label' => $this->l('AWB'),
+            'bookurier_awb_code' => (string) $awb['awb_code'],
+            'bookurier_awb_download_label' => $this->l('Download AWB PDF'),
+            'bookurier_awb_download_url' => $this->buildAwbDownloadUrl($idOrder),
+        ));
+
+        return $this->fetch('module:' . $this->name . '/views/templates/hook/admin_order_awb.tpl');
+    }
+
+    public function validateAwbDownloadToken($idOrder, $token)
+    {
+        return hash_equals($this->buildAwbDownloadToken($idOrder), (string) $token);
+    }
+
+    private function resolveOrderIdFromHookParams($params)
+    {
+        if (isset($params['id_order'])) {
+            return (int) $params['id_order'];
+        }
+
+        if (isset($params['order']) && is_object($params['order']) && \Validate::isLoadedObject($params['order'])) {
+            return (int) $params['order']->id;
+        }
+
+        return (int) Tools::getValue('id_order');
+    }
+
+    private function buildAwbDownloadUrl($idOrder)
+    {
+        return $this->context->link->getModuleLink($this->name, 'awbpdf', array(
+            'id_order' => (int) $idOrder,
+            'token' => $this->buildAwbDownloadToken($idOrder),
+        ));
+    }
+
+    private function buildAwbDownloadToken($idOrder)
+    {
+        return hash_hmac('sha256', (string) (int) $idOrder, _COOKIE_KEY_);
+    }
+
     private function ensureRequiredHooks()
     {
         if (!method_exists($this, 'isRegisteredInHook')) {
             return;
         }
 
-        foreach (array('actionValidateOrder', 'actionOrderStatusPostUpdate') as $hookName) {
+        foreach (array('actionValidateOrder', 'actionOrderStatusPostUpdate', 'displayAdminOrderMain', 'displayAdminOrder') as $hookName) {
             if (!$this->isRegisteredInHook($hookName)) {
                 $this->registerHook($hookName);
             }

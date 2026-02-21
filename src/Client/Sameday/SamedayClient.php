@@ -247,6 +247,40 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * @throws ApiException
+     */
+    public function downloadAwbPdf(string $awbNumber): string
+    {
+        $awbNumber = trim($awbNumber);
+        if ($awbNumber === '') {
+            throw new ApiException('SameDay AWB number is required for PDF download.');
+        }
+
+        $response = $this->requestWithToken('GET', '/api/awb/download/' . rawurlencode($awbNumber));
+        $statusCode = (int) $response->getStatusCode();
+        if ($statusCode >= 400) {
+            throw new ApiException('SameDay AWB PDF download failed with HTTP ' . $statusCode . '.');
+        }
+
+        $body = (string) $response->getBody();
+        if (strpos(trim($body), '{') === 0) {
+            $decoded = json_decode($body, true);
+            if (is_array($decoded)) {
+                $message = $this->extractApiErrorMessage($decoded);
+                if ($message === '') {
+                    $message = 'SameDay AWB PDF download returned an API error.';
+                }
+
+                throw new ApiException($message);
+            }
+        }
+
+        return $body;
+    }
+
+    /**
      * @return string
      *
      * @throws ApiException

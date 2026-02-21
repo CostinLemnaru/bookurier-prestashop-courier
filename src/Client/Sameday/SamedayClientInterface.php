@@ -65,4 +65,13 @@ interface SamedayClientInterface
      * @return CreateAwbResponseDto
      */
     public function createAwb(CreateAwbRequestDto $request): CreateAwbResponseDto;
+
+    /**
+     * Download AWB label PDF.
+     *
+     * @param string $awbNumber
+     *
+     * @return string
+     */
+    public function downloadAwbPdf(string $awbNumber): string;
 }
