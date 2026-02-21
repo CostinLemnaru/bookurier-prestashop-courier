@@ -50,7 +50,7 @@ class Installer
     private function installConfiguration()
     {
         return \Configuration::updateValue(\Bookurier::CONFIG_LOG_LEVEL, 'info')
-            && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENV, 'demo')
+            && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENV, 'prod')
             && \Configuration::updateValue(\Bookurier::CONFIG_DEFAULT_SERVICE, '9')
             && \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ENABLED, '1')
             && \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES, $this->getDefaultAutoAwbStatusIds())

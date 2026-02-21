@@ -76,13 +76,13 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
     public function __construct(
         $username = '',
         $password = '',
-        $environment = self::ENV_DEMO,
+        $environment = self::ENV_PROD,
         ClientInterface $httpClient = null,
         LoggerInterface $logger = null
     ) {
         $this->username = (string) $username;
         $this->password = (string) $password;
-        $this->environment = self::ENV_DEMO;
+        $this->environment = self::ENV_PROD;
         $this->setEnvironment($environment);
         $this->token = '';
         $this->tokenExpireAt = '';
@@ -106,7 +106,7 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
     public function setEnvironment(string $environment): void
     {
         $environment = strtolower($environment);
-        $this->environment = $environment === self::ENV_PROD ? self::ENV_PROD : self::ENV_DEMO;
+        $this->environment = $environment === self::ENV_DEMO ? self::ENV_DEMO : self::ENV_PROD;
     }
 
     /**

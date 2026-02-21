@@ -130,8 +130,8 @@ class ConfigFormManager
                         'name' => \Bookurier::CONFIG_SAMEDAY_ENV,
                         'options' => array(
                             'query' => array(
-                                array('id' => 'demo', 'name' => $this->t('Demo')),
                                 array('id' => 'prod', 'name' => $this->t('Production')),
+                                array('id' => 'demo', 'name' => $this->t('Demo')),
                             ),
                             'id' => 'id',
                             'name' => 'name',
@@ -203,7 +203,7 @@ class ConfigFormManager
             ),
             \Bookurier::CONFIG_SAMEDAY_ENV => (string) \Tools::getValue(
                 \Bookurier::CONFIG_SAMEDAY_ENV,
-                (string) $this->getConfigValueOrDefault(\Bookurier::CONFIG_SAMEDAY_ENV, 'demo')
+                (string) $this->getConfigValueOrDefault(\Bookurier::CONFIG_SAMEDAY_ENV, 'prod')
             ),
             \Bookurier::CONFIG_SAMEDAY_API_USERNAME => (string) \Tools::getValue(
                 \Bookurier::CONFIG_SAMEDAY_API_USERNAME,

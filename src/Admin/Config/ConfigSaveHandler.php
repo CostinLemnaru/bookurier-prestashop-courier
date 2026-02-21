@@ -122,7 +122,7 @@ class ConfigSaveHandler
 
     private function normalizeSamedayEnvironment($environment)
     {
-        return strtolower((string) $environment) === 'prod' ? 'prod' : 'demo';
+        return strtolower((string) $environment) === 'demo' ? 'demo' : 'prod';
     }
 
     private function isValidSamedayPackageType($packageType)

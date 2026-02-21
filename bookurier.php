@@ -257,7 +257,7 @@ class Bookurier extends CarrierModule
     public function getSamedayClient()
     {
         if ($this->samedayClient === null) {
-            $environment = strtolower((string) Configuration::get(self::CONFIG_SAMEDAY_ENV)) === 'prod' ? 'prod' : 'demo';
+            $environment = strtolower((string) Configuration::get(self::CONFIG_SAMEDAY_ENV)) === 'demo' ? 'demo' : 'prod';
             $this->samedayClient = new SamedayClient(
                 (string) Configuration::get(self::CONFIG_SAMEDAY_API_USERNAME),
                 (string) Configuration::get(self::CONFIG_SAMEDAY_API_PASSWORD),

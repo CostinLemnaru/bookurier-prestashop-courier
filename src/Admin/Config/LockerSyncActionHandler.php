@@ -36,7 +36,7 @@ class LockerSyncActionHandler
 
         $username = trim((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_API_USERNAME));
         $password = trim((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_API_PASSWORD));
-        $environment = strtolower((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENV)) === 'prod' ? 'prod' : 'demo';
+        $environment = strtolower((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENV)) === 'demo' ? 'demo' : 'prod';
 
         if ($username === '' || $password === '') {
             return $this->module->displayError(
