@@ -45,13 +45,22 @@
         },
         body: 'locker_id=' + encodeURIComponent(String(lockerId))
       })
-        .then(function (response) { return response.json(); })
-        .then(function (payload) {
-          if (!payload || payload.success !== true) {
-            throw new Error(payload && payload.message ? payload.message : 'Locker save failed.');
-          }
+        .then(function (response) {
+          return response.text().then(function (rawBody) {
+            var payload = null;
 
-          return payload;
+            try {
+              payload = rawBody ? JSON.parse(rawBody) : {};
+            } catch (e) {
+              payload = {};
+            }
+
+            if (!response.ok || !payload || payload.success !== true) {
+              throw new Error(payload && payload.message ? payload.message : 'Locker save failed.');
+            }
+
+            return payload;
+          });
         })
         .then(function () {
           setStatus('', false);

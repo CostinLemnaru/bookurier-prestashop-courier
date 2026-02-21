@@ -4,6 +4,7 @@ namespace Bookurier\Install;
 
 use Bookurier\Install\SamedayLockerStorage;
 use Bookurier\Install\SamedayLockerSelectionStorage;
+use Bookurier\Install\AwbStorage;
 
 class Uninstaller
 {
@@ -90,6 +91,7 @@ class Uninstaller
     private function uninstallDatabase()
     {
         return SamedayLockerSelectionStorage::dropTable()
-            && SamedayLockerStorage::dropTable();
+            && SamedayLockerStorage::dropTable()
+            && AwbStorage::dropTable();
     }
 }

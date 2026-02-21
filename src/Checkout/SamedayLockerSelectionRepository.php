@@ -45,7 +45,7 @@ class SamedayLockerSelectionRepository
             );
         }
 
-        return $db->insert(
+        $inserted = $db->insert(
             SamedayLockerSelectionStorage::TABLE,
             array(
                 'id_cart' => (int) $idCart,
@@ -54,6 +54,20 @@ class SamedayLockerSelectionRepository
                 'created_at' => $now,
                 'updated_at' => $now,
             )
+        );
+
+        if ($inserted) {
+            return true;
+        }
+
+        // Concurrent insert on same cart can fail due uniq_cart; retry as update.
+        return $db->update(
+            SamedayLockerSelectionStorage::TABLE,
+            array(
+                'locker_id' => (int) $lockerId,
+                'updated_at' => $now,
+            ),
+            'id_cart = ' . (int) $idCart
         );
     }
 
@@ -70,6 +84,17 @@ class SamedayLockerSelectionRepository
                 'updated_at' => date('Y-m-d H:i:s'),
             ),
             'id_cart = ' . (int) $idCart
+        );
+    }
+
+    public function getLockerIdByOrder($idOrder)
+    {
+        if ((int) $idOrder <= 0 || !$this->ensureTable()) {
+            return 0;
+        }
+
+        return (int) \Db::getInstance()->getValue(
+            'SELECT locker_id FROM `' . $this->getTableName() . '` WHERE id_order = ' . (int) $idOrder
         );
     }
 

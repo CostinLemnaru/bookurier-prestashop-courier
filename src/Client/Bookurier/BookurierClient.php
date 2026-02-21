@@ -94,11 +94,12 @@ class BookurierClient extends AbstractApiClient implements BookurierClientInterf
 
         $data = $this->decodeJsonOrFail('Bookurier', $response, 'add_cmds.php');
         $dto = CreateAwbResponseDto::fromApiResponse($data);
+        $awbCodes = $dto->getAwbCodes();
 
-        if (!$dto->isSuccess()) {
+        if (!$dto->isSuccess() || empty($awbCodes)) {
             $this->logger->warning('Bookurier create AWB failed.', array('message' => $dto->getMessage()));
         } else {
-            $this->logger->info('Bookurier AWB created.', array('awb_codes' => $dto->getAwbCodes()));
+            $this->logger->info('Bookurier AWB created.', array('awb_codes' => $awbCodes));
         }
 
         return $dto;

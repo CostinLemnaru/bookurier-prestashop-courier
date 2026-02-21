@@ -36,4 +36,5 @@ class SamedayLockerSelectionStorage
             KEY `idx_locker` (`locker_id`)
         ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
     }
+
 }

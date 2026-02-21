@@ -8,28 +8,34 @@ class BookurierLockerModuleFrontController extends ModuleFrontController
     public function postProcess()
     {
         header('Content-Type: application/json');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
 
-        if (!$this->module || (int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) !== 1) {
-            $this->jsonError('SameDay is disabled.');
+        try {
+            if (!$this->module || (int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) !== 1) {
+                $this->jsonError('SameDay is disabled.');
+            }
+
+            $idCart = (int) $this->context->cart->id;
+            $lockerId = (int) \Tools::getValue('locker_id');
+            if ($idCart <= 0 || $lockerId <= 0) {
+                $this->jsonError('Invalid locker selection.');
+            }
+
+            $lockerRepository = new SamedayLockerRepository();
+            if (!$lockerRepository->isActiveLockerId($lockerId)) {
+                $this->jsonError('Selected locker is not valid.');
+            }
+
+            $selectionRepository = new SamedayLockerSelectionRepository();
+            if (!$selectionRepository->saveForCart($idCart, $lockerId)) {
+                $this->jsonError('Locker selection could not be saved.');
+            }
+
+            $this->jsonSuccess();
+        } catch (\Exception $exception) {
+            $this->jsonError($exception->getMessage() !== '' ? $exception->getMessage() : 'Locker save failed.');
         }
-
-        $idCart = (int) $this->context->cart->id;
-        $lockerId = (int) \Tools::getValue('locker_id');
-        if ($idCart <= 0 || $lockerId <= 0) {
-            $this->jsonError('Invalid locker selection.');
-        }
-
-        $lockerRepository = new SamedayLockerRepository();
-        if (!$lockerRepository->isActiveLockerId($lockerId)) {
-            $this->jsonError('Selected locker is not valid.');
-        }
-
-        $selectionRepository = new SamedayLockerSelectionRepository();
-        if (!$selectionRepository->saveForCart($idCart, $lockerId)) {
-            $this->jsonError('Locker selection could not be saved.');
-        }
-
-        $this->jsonSuccess();
     }
 
     private function jsonSuccess()

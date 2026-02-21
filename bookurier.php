@@ -6,6 +6,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once __DIR__ . '/vendor/autoload.php';
 
+use Bookurier\Awb\AutoAwbService;
 use Bookurier\Admin\Config\ConfigFormManager;
 use Bookurier\Admin\Config\SamedayLockerRepository;
 use Bookurier\Client\Bookurier\BookurierClient;
@@ -39,6 +40,7 @@ class Bookurier extends CarrierModule
     private $logger;
     private $bookurierClient;
     private $samedayClient;
+    private $autoAwbService;
 
     public function __construct()
     {
@@ -76,6 +78,8 @@ class Bookurier extends CarrierModule
 
     public function getContent()
     {
+        $this->ensureRequiredHooks();
+
         return (new ConfigFormManager($this))->handle();
     }
 
@@ -176,6 +180,18 @@ class Bookurier extends CarrierModule
 
         $selectionRepository = new SamedayLockerSelectionRepository();
         $selectionRepository->assignOrder($idCart, $idOrder);
+
+        $this->maybeGenerateAutoAwb($order, $idCart);
+    }
+
+    public function hookActionOrderStatusPostUpdate($params)
+    {
+        $order = $this->resolveOrderFromStatusParams($params);
+        if ($order === null) {
+            return;
+        }
+
+        $this->maybeGenerateAutoAwb($order, (int) $order->id_cart);
     }
 
     public function getOrderShippingCost($params, $shipping_cost)
@@ -192,6 +208,7 @@ class Bookurier extends CarrierModule
     {
         $this->bookurierClient = null;
         $this->samedayClient = null;
+        $this->autoAwbService = null;
     }
 
     public function getLogger()
@@ -237,5 +254,94 @@ class Bookurier extends CarrierModule
     private function isSamedayCheckoutEnabled()
     {
         return (int) Configuration::get(self::CONFIG_SAMEDAY_ENABLED) === 1;
+    }
+
+    private function getAutoAwbService()
+    {
+        if ($this->autoAwbService === null) {
+            $this->autoAwbService = new AutoAwbService($this);
+        }
+
+        return $this->autoAwbService;
+    }
+
+    private function maybeGenerateAutoAwb($order, $idCart)
+    {
+        if (!is_object($order) || !\Validate::isLoadedObject($order)) {
+            return;
+        }
+
+        $carrierReference = $this->resolveCarrierReference($order);
+        if (!$this->isManagedCarrierReference($carrierReference)) {
+            return;
+        }
+
+        try {
+            $this->getAutoAwbService()->generateForOrder($order, (int) $idCart, $carrierReference);
+        } catch (\Exception $exception) {
+            $this->getLogger()->error('Automatic AWB generation failed.', array(
+                'id_order' => (int) $order->id,
+                'id_cart' => (int) $idCart,
+                'carrier_reference' => $carrierReference,
+                'message' => $exception->getMessage(),
+            ));
+        }
+    }
+
+    private function resolveOrderFromStatusParams($params)
+    {
+        if (isset($params['order']) && is_object($params['order']) && \Validate::isLoadedObject($params['order'])) {
+            return $params['order'];
+        }
+
+        $idOrder = (int) ($params['id_order'] ?? 0);
+        if ($idOrder <= 0) {
+            return null;
+        }
+
+        $order = new Order($idOrder);
+
+        return \Validate::isLoadedObject($order) ? $order : null;
+    }
+
+    private function resolveCarrierReference($order)
+    {
+        $idCarrier = (int) (is_object($order) ? $order->id_carrier : 0);
+        if ($idCarrier <= 0) {
+            return 0;
+        }
+
+        $carrier = new Carrier($idCarrier);
+        if (!\Validate::isLoadedObject($carrier)) {
+            return 0;
+        }
+
+        return (int) $carrier->id_reference;
+    }
+
+    private function isManagedCarrierReference($carrierReference)
+    {
+        $carrierReference = (int) $carrierReference;
+        if ($carrierReference <= 0) {
+            return false;
+        }
+
+        return in_array($carrierReference, array(
+            (int) Configuration::get(self::CONFIG_BOOKURIER_CARRIER_REFERENCE),
+            (int) Configuration::get(self::CONFIG_CARRIER_REFERENCE),
+        ), true);
+    }
+
+    private function ensureRequiredHooks()
+    {
+        if (!method_exists($this, 'isRegisteredInHook')) {
+            return;
+        }
+
+        foreach (array('actionValidateOrder', 'actionOrderStatusPostUpdate') as $hookName) {
+            if (!$this->isRegisteredInHook($hookName)) {
+                $this->registerHook($hookName);
+            }
+        }
     }
 }

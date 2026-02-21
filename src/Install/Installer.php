@@ -4,6 +4,7 @@ namespace Bookurier\Install;
 
 use Bookurier\Install\SamedayLockerSelectionStorage;
 use Bookurier\Install\SamedayLockerStorage;
+use Bookurier\Install\AwbStorage;
 
 class Installer
 {
@@ -40,7 +41,8 @@ class Installer
             && $this->module->registerHook('actionAdminControllerSetMedia')
             && $this->module->registerHook('actionFrontControllerSetMedia')
             && $this->module->registerHook('displayCarrierExtraContent')
-            && $this->module->registerHook('actionValidateOrder');
+            && $this->module->registerHook('actionValidateOrder')
+            && $this->module->registerHook('actionOrderStatusPostUpdate');
     }
 
     private function installConfiguration()
@@ -56,7 +58,8 @@ class Installer
     private function installDatabase()
     {
         return SamedayLockerStorage::ensureTable()
-            && SamedayLockerSelectionStorage::ensureTable();
+            && SamedayLockerSelectionStorage::ensureTable()
+            && AwbStorage::ensureTable();
     }
 
     private function installCarrier()

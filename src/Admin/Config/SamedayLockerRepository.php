@@ -148,6 +148,22 @@ class SamedayLockerRepository
         ) > 0;
     }
 
+    public function findActiveLockerById($lockerId)
+    {
+        $lockerId = (int) $lockerId;
+        if ($lockerId <= 0 || !$this->ensureTable()) {
+            return null;
+        }
+
+        $row = \Db::getInstance()->getRow(
+            'SELECT locker_id, name, county, city, address, postal_code'
+            . ' FROM `' . $this->getTableName() . '`'
+            . ' WHERE locker_id = ' . $lockerId . ' AND is_active = 1'
+        );
+
+        return is_array($row) ? $row : null;
+    }
+
     public function findBestLockerIdForAddress($deliveryAddress, array $lockers)
     {
         if (!is_object($deliveryAddress) || empty($lockers)) {

@@ -44,4 +44,5 @@ class SamedayLockerStorage
             KEY `idx_active` (`is_active`)
         ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
     }
+
 }
