@@ -19,6 +19,7 @@ class AutoAwbService
     private $lockerSelectionRepository;
     private $lockerRepository;
     private $columnExistsCache;
+    private $samedayServiceIdsCache;
 
     public function __construct(
         $module,
@@ -31,6 +32,7 @@ class AutoAwbService
         $this->lockerSelectionRepository = $lockerSelectionRepository ?: new SamedayLockerSelectionRepository();
         $this->lockerRepository = $lockerRepository ?: new SamedayLockerRepository();
         $this->columnExistsCache = array();
+        $this->samedayServiceIdsCache = null;
     }
 
     public function generateForOrder($order, $idCart = 0, $carrierReference = 0)
@@ -88,6 +90,11 @@ class AutoAwbService
 
             return $this->awbRepository->findByOrderId($idOrder);
         } catch (\Exception $exception) {
+            if ($exception instanceof AwbGenerationException) {
+                $requestPayload = $exception->getRequestPayload();
+                $responsePayload = $exception->getResponsePayload();
+            }
+
             $this->awbRepository->saveError(
                 $idOrder,
                 $idCart,
@@ -206,17 +213,34 @@ class AutoAwbService
     {
         $payload = $this->buildBookurierPayload($order);
         $requestPayload = (string) json_encode($payload);
+        $responsePayload = '';
 
-        $response = $this->module->getBookurierClient()->createAwb(
-            BookurierCreateAwbRequestDto::fromArray($payload)
-        );
+        try {
+            $response = $this->module->getBookurierClient()->createAwb(
+                BookurierCreateAwbRequestDto::fromArray($payload)
+            );
 
-        $responsePayload = (string) json_encode($response->getRawResponse());
-        $awbCode = trim((string) ($response->getAwbCodes()[0] ?? ''));
-        if (!$response->isSuccess() || $awbCode === '') {
-            throw new \RuntimeException(
-                'Bookurier AWB missing. message=' . (string) $response->getMessage()
-                . ' response=' . $responsePayload
+            $responsePayload = (string) json_encode($response->getRawResponse());
+            $awbCode = trim((string) ($response->getAwbCodes()[0] ?? ''));
+            if (!$response->isSuccess() || $awbCode === '') {
+                throw new AwbGenerationException(
+                    'Bookurier AWB missing. message=' . (string) $response->getMessage()
+                    . ' response=' . $responsePayload,
+                    $requestPayload,
+                    $responsePayload
+                );
+            }
+        } catch (\Exception $exception) {
+            if ($exception instanceof AwbGenerationException) {
+                throw $exception;
+            }
+
+            throw new AwbGenerationException(
+                $exception->getMessage(),
+                $requestPayload,
+                $responsePayload,
+                (int) $exception->getCode(),
+                $exception
             );
         }
 
@@ -232,17 +256,17 @@ class AutoAwbService
     private function createSamedayAwb($order, $lockerId)
     {
         if ((int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) !== 1) {
-            throw new \RuntimeException('SameDay integration is disabled.');
+            throw new AwbGenerationException('SameDay integration is disabled.');
         }
 
         $lockerId = (int) $lockerId;
         if ($lockerId <= 0) {
-            throw new \RuntimeException('No SameDay locker selected for order.');
+            throw new AwbGenerationException('No SameDay locker selected for order.');
         }
 
         $locker = $this->lockerRepository->findActiveLockerById($lockerId);
         if (!is_array($locker)) {
-            throw new \RuntimeException('Selected locker is not active.');
+            throw new AwbGenerationException('Selected locker is not active.');
         }
 
         $serviceCandidates = $this->resolveSamedayServiceCandidates($locker);
@@ -252,6 +276,7 @@ class AutoAwbService
             $isLastCandidate = $index === count($serviceCandidates) - 1;
             $payload = $this->buildSamedayPayload($order, $lockerId, $locker, (int) $serviceId);
             $requestPayload = (string) json_encode($payload);
+            $responsePayload = '';
 
             try {
                 $response = $this->module->getSamedayClient()->createAwb(
@@ -261,9 +286,11 @@ class AutoAwbService
                 $responsePayload = (string) json_encode($response->getRawResponse());
                 $awbCode = trim((string) $response->getAwbNumber());
                 if (!$response->isSuccess() || $awbCode === '') {
-                    throw new \RuntimeException(
+                    throw new AwbGenerationException(
                         'SameDay AWB missing. message=' . (string) $response->getMessage()
-                        . ' response=' . $responsePayload
+                        . ' response=' . $responsePayload,
+                        $requestPayload,
+                        $responsePayload
                     );
                 }
 
@@ -278,8 +305,10 @@ class AutoAwbService
                 $lastException = $exception;
 
                 if ($isLastCandidate || !$this->isSamedayValidationFailure($exception)) {
-                    throw new \RuntimeException(
-                        $exception->getMessage() . ' | request=' . $requestPayload,
+                    throw new AwbGenerationException(
+                        $exception->getMessage(),
+                        $requestPayload,
+                        $responsePayload,
                         (int) $exception->getCode(),
                         $exception
                     );
@@ -288,10 +317,14 @@ class AutoAwbService
         }
 
         if ($lastException instanceof \Exception) {
-            throw $lastException;
+            if ($lastException instanceof AwbGenerationException) {
+                throw $lastException;
+            }
+
+            throw new AwbGenerationException($lastException->getMessage(), '', '', (int) $lastException->getCode(), $lastException);
         }
 
-        throw new \RuntimeException('SameDay AWB could not be generated.');
+        throw new AwbGenerationException('SameDay AWB could not be generated.');
     }
 
     private function buildBookurierPayload($order)
@@ -371,6 +404,11 @@ class AutoAwbService
             throw new \RuntimeException('SameDay pickup point is missing.');
         }
 
+        $packageType = (int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE);
+        if (!in_array($packageType, array(0, 1, 2), true)) {
+            $packageType = 0;
+        }
+
         $name = trim((string) $address->firstname . ' ' . (string) $address->lastname);
         if ($name === '') {
             $name = trim((string) ($customer->firstname ?? '') . ' ' . (string) ($customer->lastname ?? ''));
@@ -381,7 +419,7 @@ class AutoAwbService
 
         return array(
             'pickupPoint' => $pickupPoint,
-            'packageType' => 2,
+            'packageType' => $packageType,
             'packageNumber' => 1,
             'packageWeight' => (float) $this->resolveOrderWeight($order),
             'service' => (int) $serviceId,
@@ -411,14 +449,28 @@ class AutoAwbService
 
     private function resolveSamedayServiceCandidates(array $locker)
     {
-        $lockerName = strtolower(trim((string) ($locker['name'] ?? '')));
-        $isPudo = strpos($lockerName, 'pudo') !== false;
+        $serviceIds = $this->resolveSamedayServiceIdMap();
+        $lockerService = (int) ($serviceIds['LN'] ?? self::SAMEDAY_LOCKER_SERVICE);
+        $homeService = (int) ($serviceIds['LH'] ?? self::SAMEDAY_PUDO_SERVICE);
+        $boxesCount = (int) ($locker['boxes_count'] ?? 0);
 
-        if ($isPudo) {
-            return array(self::SAMEDAY_PUDO_SERVICE, self::SAMEDAY_LOCKER_SERVICE);
+        $candidates = $boxesCount > 0
+            ? array($lockerService, $homeService)
+            : array($homeService, $lockerService);
+
+        $resolved = array();
+        foreach ($candidates as $candidate) {
+            $candidate = (int) $candidate;
+            if ($candidate > 0 && !in_array($candidate, $resolved, true)) {
+                $resolved[] = $candidate;
+            }
         }
 
-        return array(self::SAMEDAY_LOCKER_SERVICE, self::SAMEDAY_PUDO_SERVICE);
+        if (empty($resolved)) {
+            return array(self::SAMEDAY_LOCKER_SERVICE, self::SAMEDAY_PUDO_SERVICE);
+        }
+
+        return $resolved;
     }
 
     private function isSamedayValidationFailure(\Exception $exception)
@@ -427,6 +479,77 @@ class AutoAwbService
 
         return strpos($message, 'http 400') !== false
             && strpos($message, 'validation failed') !== false;
+    }
+
+    private function resolveSamedayServiceIdMap()
+    {
+        if (is_array($this->samedayServiceIdsCache)) {
+            return $this->samedayServiceIdsCache;
+        }
+
+        $defaults = array(
+            'LN' => self::SAMEDAY_LOCKER_SERVICE,
+            'LH' => self::SAMEDAY_PUDO_SERVICE,
+        );
+
+        $decoded = json_decode((string) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_SERVICES_CACHE), true);
+        if (is_array($decoded)) {
+            $hasLn = isset($decoded['LN']) && (int) $decoded['LN'] > 0;
+            $hasLh = isset($decoded['LH']) && (int) $decoded['LH'] > 0;
+            if (!$hasLn || !$hasLh) {
+                return $this->fetchAndCacheSamedayServiceIdMap($defaults);
+            }
+
+            $resolved = array();
+            foreach ($defaults as $code => $fallbackId) {
+                $candidate = (int) ($decoded[$code] ?? 0);
+                $resolved[$code] = $candidate > 0 ? $candidate : $fallbackId;
+            }
+
+            $this->samedayServiceIdsCache = $resolved;
+
+            return $this->samedayServiceIdsCache;
+        }
+
+        return $this->fetchAndCacheSamedayServiceIdMap($defaults);
+    }
+
+    private function fetchAndCacheSamedayServiceIdMap(array $defaults)
+    {
+        $resolved = $defaults;
+
+        try {
+            $services = $this->module->getSamedayClient()->getServices(1, 500);
+            foreach ($services as $service) {
+                if (!is_array($service)) {
+                    continue;
+                }
+
+                $serviceId = (int) ($service['id'] ?? 0);
+                if ($serviceId <= 0) {
+                    continue;
+                }
+
+                $serviceCode = strtoupper(trim((string) ($service['serviceCode'] ?? $service['code'] ?? '')));
+                if (!isset($resolved[$serviceCode])) {
+                    continue;
+                }
+
+                $resolved[$serviceCode] = $serviceId;
+            }
+
+            \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_SERVICES_CACHE, json_encode($resolved));
+        } catch (\Exception $exception) {
+            if (is_object($this->module) && method_exists($this->module, 'getLogger')) {
+                $this->module->getLogger()->warning('Could not refresh SameDay services cache.', array(
+                    'message' => $exception->getMessage(),
+                ));
+            }
+        }
+
+        $this->samedayServiceIdsCache = $resolved;
+
+        return $this->samedayServiceIdsCache;
     }
 
     private function resolveCarrierReference($order)

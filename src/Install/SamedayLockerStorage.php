@@ -33,6 +33,7 @@ class SamedayLockerStorage
             `postal_code` VARCHAR(32) NOT NULL DEFAULT \'\',
             `lat` VARCHAR(32) NOT NULL DEFAULT \'\',
             `lng` VARCHAR(32) NOT NULL DEFAULT \'\',
+            `boxes_count` INT UNSIGNED NOT NULL DEFAULT 0,
             `country_code` VARCHAR(8) NOT NULL DEFAULT \'\',
             `is_active` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
             `updated_at` DATETIME NOT NULL,

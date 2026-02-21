@@ -43,6 +43,10 @@ class ConfigSaveHandler
             \Bookurier::CONFIG_SAMEDAY_PICKUP_POINT,
             (int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINT)
         );
+        $samedayPackageType = (int) \Tools::getValue(
+            \Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE,
+            (int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE)
+        );
 
         $errors = array();
         if ($apiUser === '') {
@@ -74,6 +78,9 @@ class ConfigSaveHandler
                 $errors[] = $this->t('SameDay API password is required when SameDay is enabled.');
             }
         }
+        if (!$this->isValidSamedayPackageType($samedayPackageType)) {
+            $errors[] = $this->t('SameDay package type is invalid.');
+        }
 
         if (empty($errors) && $samedayEnabled === 1) {
             try {
@@ -98,6 +105,8 @@ class ConfigSaveHandler
         \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_API_USERNAME, $samedayUser);
         \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENV, $samedayEnv);
         \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINT, (string) $samedayPickupPoint);
+        \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE, (string) $samedayPackageType);
+        \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_SERVICES_CACHE, '{}');
 
         if ($apiPasswordInput !== '') {
             \Configuration::updateValue(\Bookurier::CONFIG_API_PASSWORD, $apiPasswordInput);
@@ -114,6 +123,11 @@ class ConfigSaveHandler
     private function normalizeSamedayEnvironment($environment)
     {
         return strtolower((string) $environment) === 'prod' ? 'prod' : 'demo';
+    }
+
+    private function isValidSamedayPackageType($packageType)
+    {
+        return in_array((int) $packageType, array(0, 1, 2), true);
     }
 
     private function resolveAutoAwbStatusIdsFromRequest()

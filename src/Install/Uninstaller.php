@@ -29,6 +29,8 @@ class Uninstaller
             \Bookurier::CONFIG_SAMEDAY_API_PASSWORD,
             \Bookurier::CONFIG_SAMEDAY_PICKUP_POINT,
             \Bookurier::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE,
+            \Bookurier::CONFIG_SAMEDAY_SERVICES_CACHE,
+            \Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE,
             \Bookurier::CONFIG_BOOKURIER_CARRIER_REFERENCE,
             \Bookurier::CONFIG_CARRIER_REFERENCE,
         ) as $configKey) {

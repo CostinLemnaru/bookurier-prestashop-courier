@@ -48,6 +48,11 @@ class LockerDto
     private $lng;
 
     /**
+     * @var int
+     */
+    private $boxesCount;
+
+    /**
      * @param int $lockerId
      * @param string $name
      * @param string $county
@@ -56,6 +61,7 @@ class LockerDto
      * @param string $postalCode
      * @param float $lat
      * @param float $lng
+     * @param int $boxesCount
      */
     public function __construct(
         $lockerId,
@@ -65,7 +71,8 @@ class LockerDto
         $address,
         $postalCode,
         $lat,
-        $lng
+        $lng,
+        $boxesCount
     ) {
         $this->lockerId = (int) $lockerId;
         $this->name = (string) $name;
@@ -75,6 +82,7 @@ class LockerDto
         $this->postalCode = (string) $postalCode;
         $this->lat = (float) $lat;
         $this->lng = (float) $lng;
+        $this->boxesCount = (int) $boxesCount;
     }
 
     /**
@@ -92,7 +100,8 @@ class LockerDto
             isset($data['address']) ? (string) $data['address'] : '',
             isset($data['postalCode']) ? (string) $data['postalCode'] : '',
             isset($data['lat']) ? (float) $data['lat'] : 0.0,
-            isset($data['long']) ? (float) $data['long'] : (isset($data['lng']) ? (float) $data['lng'] : 0.0)
+            isset($data['long']) ? (float) $data['long'] : (isset($data['lng']) ? (float) $data['lng'] : 0.0),
+            isset($data['availableBoxes']) && is_array($data['availableBoxes']) ? count($data['availableBoxes']) : 0
         );
     }
 
@@ -110,7 +119,7 @@ class LockerDto
             'postalCode' => $this->postalCode,
             'lat' => $this->lat,
             'lng' => $this->lng,
+            'boxesCount' => $this->boxesCount,
         );
     }
 }
-

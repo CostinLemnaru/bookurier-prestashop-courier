@@ -228,6 +228,25 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
      *
      * @throws ApiException
      */
+    public function getServices(int $page = 1, int $perPage = 50): array
+    {
+        $response = $this->requestWithToken('GET', '/api/client/services', array(
+            'query' => $this->buildPaginationQuery($page, $perPage),
+        ));
+
+        $data = $this->decodeJsonOrFail('SameDay', $response, '/api/client/services');
+        if (isset($data['data']) && is_array($data['data'])) {
+            return $data['data'];
+        }
+
+        return array();
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @throws ApiException
+     */
     public function createAwb(CreateAwbRequestDto $request): CreateAwbResponseDto
     {
         $response = $this->requestWithToken('POST', '/api/awb', array(

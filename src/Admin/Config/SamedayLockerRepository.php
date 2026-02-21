@@ -55,6 +55,7 @@ class SamedayLockerRepository
                 'postal_code' => (string) ($locker['postalCode'] ?? ''),
                 'lat' => (string) ($locker['lat'] ?? ''),
                 'lng' => (string) ($locker['lng'] ?? ''),
+                'boxes_count' => (int) ($locker['boxesCount'] ?? 0),
                 'country_code' => '',
                 'is_active' => 1,
                 'updated_at' => $now,
@@ -156,7 +157,7 @@ class SamedayLockerRepository
         }
 
         $row = \Db::getInstance()->getRow(
-            'SELECT locker_id, name, county, city, address, postal_code'
+            'SELECT locker_id, name, county, city, address, postal_code, boxes_count'
             . ' FROM `' . $this->getTableName() . '`'
             . ' WHERE locker_id = ' . $lockerId . ' AND is_active = 1'
         );

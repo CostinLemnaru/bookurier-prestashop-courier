@@ -157,6 +157,17 @@ class ConfigFormManager
                         'desc' => $this->t('List is refreshed from SameDay when you save settings and SameDay is enabled.'),
                     ),
                     array(
+                        'type' => 'select',
+                        'label' => $this->t('SameDay Package Type'),
+                        'name' => \Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE,
+                        'options' => array(
+                            'query' => $this->getSamedayPackageTypeOptions(),
+                            'id' => 'id',
+                            'name' => 'name',
+                        ),
+                        'desc' => $this->t('Default package type sent to SameDay when generating AWB.'),
+                    ),
+                    array(
                         'type' => 'html',
                         'name' => 'sameday_lockers_sync',
                         'html_content' => '<div class="bookurier-sameday-sync"><button type="submit" class="btn btn-default" name="' . \Bookurier::ACTION_SYNC_LOCKERS . '" value="1"><i class="process-icon-refresh"></i> ' . $this->t('Sync SameDay Lockers') . '</button><p style="margin-top:8px;"><strong>' . $this->t('Current imported active lockers:') . '</strong> ' . (int) $lockerCount . '</p></div>',
@@ -179,20 +190,20 @@ class ConfigFormManager
             ),
             \Bookurier::CONFIG_DEFAULT_SERVICE => (int) \Tools::getValue(
                 \Bookurier::CONFIG_DEFAULT_SERVICE,
-                (int) (\Configuration::get(\Bookurier::CONFIG_DEFAULT_SERVICE) ?: 9)
+                (int) $this->getConfigValueOrDefault(\Bookurier::CONFIG_DEFAULT_SERVICE, 9)
             ),
             \Bookurier::CONFIG_AUTO_AWB_ENABLED => (int) \Tools::getValue(
                 \Bookurier::CONFIG_AUTO_AWB_ENABLED,
-                (int) (\Configuration::get(\Bookurier::CONFIG_AUTO_AWB_ENABLED) ?: 1)
+                (int) $this->getConfigValueOrDefault(\Bookurier::CONFIG_AUTO_AWB_ENABLED, 1)
             ),
             \Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES . '[]' => $this->resolveAutoAwbStatusValues(),
             \Bookurier::CONFIG_SAMEDAY_ENABLED => (int) \Tools::getValue(
                 \Bookurier::CONFIG_SAMEDAY_ENABLED,
-                (int) (\Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) ?: 0)
+                (int) $this->getConfigValueOrDefault(\Bookurier::CONFIG_SAMEDAY_ENABLED, 0)
             ),
             \Bookurier::CONFIG_SAMEDAY_ENV => (string) \Tools::getValue(
                 \Bookurier::CONFIG_SAMEDAY_ENV,
-                (string) (\Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENV) ?: 'demo')
+                (string) $this->getConfigValueOrDefault(\Bookurier::CONFIG_SAMEDAY_ENV, 'demo')
             ),
             \Bookurier::CONFIG_SAMEDAY_API_USERNAME => (string) \Tools::getValue(
                 \Bookurier::CONFIG_SAMEDAY_API_USERNAME,
@@ -203,7 +214,21 @@ class ConfigFormManager
                 \Bookurier::CONFIG_SAMEDAY_PICKUP_POINT,
                 (int) \Configuration::get(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINT)
             ),
+            \Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE => (int) \Tools::getValue(
+                \Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE,
+                (int) $this->getConfigValueOrDefault(\Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE, 0)
+            ),
         );
+    }
+
+    private function getConfigValueOrDefault($key, $defaultValue)
+    {
+        $value = \Configuration::get((string) $key);
+        if ($value === false || $value === null || $value === '') {
+            return $defaultValue;
+        }
+
+        return $value;
     }
 
     private function getSamedayPickupPointOptions()
@@ -233,6 +258,15 @@ class ConfigFormManager
         }
 
         return $options;
+    }
+
+    private function getSamedayPackageTypeOptions()
+    {
+        return array(
+            array('id' => 0, 'name' => $this->t('Parcel')),
+            array('id' => 1, 'name' => $this->t('Envelope')),
+            array('id' => 2, 'name' => $this->t('Large Package')),
+        );
     }
 
     private function renderLockerImportWarning()

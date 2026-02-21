@@ -56,7 +56,9 @@ class Installer
             && \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES, $this->getDefaultAutoAwbStatusIds())
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENABLED, '0')
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINT, '0')
-            && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE, '[]');
+            && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE, '[]')
+            && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_SERVICES_CACHE, '{}')
+            && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PACKAGE_TYPE, '0');
     }
 
     private function getDefaultAutoAwbStatusIds()

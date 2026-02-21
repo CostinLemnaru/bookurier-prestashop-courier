@@ -54,7 +54,8 @@ class SamedayPickupPointSyncService
         $options = array();
         foreach ($rawPickupPoints as $pickupPoint) {
             $id = (int) ($pickupPoint['id'] ?? 0);
-            if ($id <= 0) {
+            $isActive = !isset($pickupPoint['status']) || !empty($pickupPoint['status']);
+            if ($id <= 0 || !$isActive) {
                 continue;
             }
 

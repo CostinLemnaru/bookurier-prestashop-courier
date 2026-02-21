@@ -60,6 +60,14 @@ interface SamedayClientInterface
     public function getPickupPoints(int $page = 1, int $perPage = 50): array;
 
     /**
+     * @param int $page
+     * @param int $perPage
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getServices(int $page = 1, int $perPage = 50): array;
+
+    /**
      * @param CreateAwbRequestDto $request
      *
      * @return CreateAwbResponseDto
