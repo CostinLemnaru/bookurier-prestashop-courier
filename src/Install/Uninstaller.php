@@ -22,6 +22,8 @@ class Uninstaller
             \Bookurier::CONFIG_API_KEY,
             \Bookurier::CONFIG_DEFAULT_PICKUP_POINT,
             \Bookurier::CONFIG_DEFAULT_SERVICE,
+            \Bookurier::CONFIG_AUTO_AWB_ENABLED,
+            \Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES,
             \Bookurier::CONFIG_SAMEDAY_ENABLED,
             \Bookurier::CONFIG_SAMEDAY_API_USERNAME,
             \Bookurier::CONFIG_SAMEDAY_API_PASSWORD,

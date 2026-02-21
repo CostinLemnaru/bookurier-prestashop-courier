@@ -90,6 +90,29 @@ class ConfigFormManager
                         'name' => \Bookurier::CONFIG_DEFAULT_SERVICE,
                         'options' => array('query' => $this->serviceOptionsProvider->getOptions(), 'id' => 'id', 'name' => 'name'),
                     ),
+                    array(
+                        'type' => 'switch',
+                        'label' => $this->t('Auto generate AWB'),
+                        'name' => \Bookurier::CONFIG_AUTO_AWB_ENABLED,
+                        'is_bool' => true,
+                        'values' => array(
+                            array('id' => 'bookurier_auto_awb_on', 'value' => 1, 'label' => $this->t('Yes')),
+                            array('id' => 'bookurier_auto_awb_off', 'value' => 0, 'label' => $this->t('No')),
+                        ),
+                    ),
+                    array(
+                        'type' => 'select',
+                        'label' => $this->t('Auto AWB allowed statuses'),
+                        'name' => \Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES . '[]',
+                        'multiple' => true,
+                        'size' => 8,
+                        'options' => array(
+                            'query' => $this->getOrderStatusOptions(),
+                            'id' => 'id',
+                            'name' => 'name',
+                        ),
+                        'desc' => $this->t('When auto generate is ON, AWB is generated only for selected order statuses.'),
+                    ),
                     array('type' => 'html', 'name' => 'sameday_api_separator', 'html_content' => '<hr><h3>' . $this->t('SameDay API') . '</h3>'),
                     array(
                         'type' => 'switch',
@@ -158,6 +181,11 @@ class ConfigFormManager
                 \Bookurier::CONFIG_DEFAULT_SERVICE,
                 (int) (\Configuration::get(\Bookurier::CONFIG_DEFAULT_SERVICE) ?: 9)
             ),
+            \Bookurier::CONFIG_AUTO_AWB_ENABLED => (int) \Tools::getValue(
+                \Bookurier::CONFIG_AUTO_AWB_ENABLED,
+                (int) (\Configuration::get(\Bookurier::CONFIG_AUTO_AWB_ENABLED) ?: 1)
+            ),
+            \Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES . '[]' => $this->resolveAutoAwbStatusValues(),
             \Bookurier::CONFIG_SAMEDAY_ENABLED => (int) \Tools::getValue(
                 \Bookurier::CONFIG_SAMEDAY_ENABLED,
                 (int) (\Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED) ?: 0)
@@ -220,6 +248,86 @@ class ConfigFormManager
         return $this->module->displayWarning(
             $this->t('No SameDay lockers are imported yet. Locker checkout selection will not be available until lockers are synced.')
         );
+    }
+
+    private function getOrderStatusOptions()
+    {
+        $idLang = (int) (\Context::getContext()->language->id ?: \Configuration::get('PS_LANG_DEFAULT'));
+        $states = \OrderState::getOrderStates($idLang);
+        if (!is_array($states)) {
+            return array();
+        }
+
+        $options = array();
+        foreach ($states as $state) {
+            $idState = (int) ($state['id_order_state'] ?? 0);
+            if ($idState <= 0) {
+                continue;
+            }
+
+            $name = trim((string) ($state['name'] ?? ''));
+            $options[] = array(
+                'id' => $idState,
+                'name' => '[' . $idState . '] ' . ($name !== '' ? $name : ('Status #' . $idState)),
+            );
+        }
+
+        return $options;
+    }
+
+    private function resolveAutoAwbStatusValues()
+    {
+        $rawInput = \Tools::getValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES, null);
+        if ($rawInput === null) {
+            $rawInput = \Tools::getValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES . '[]', null);
+        }
+
+        if ($rawInput === null) {
+            if (is_object($this->module) && method_exists($this->module, 'getAutoAwbAllowedStatusIds')) {
+                return (array) $this->module->getAutoAwbAllowedStatusIds();
+            }
+
+            return $this->parseStatusIds((string) \Configuration::get(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES));
+        }
+
+        if (!is_array($rawInput)) {
+            $rawInput = explode(',', (string) $rawInput);
+        }
+
+        $statusIds = array();
+        foreach ($rawInput as $value) {
+            $statusId = (int) $value;
+            if ($statusId > 0) {
+                $statusIds[] = $statusId;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+        sort($statusIds);
+
+        return $statusIds;
+    }
+
+    private function parseStatusIds($rawValue)
+    {
+        $rawValue = trim((string) $rawValue);
+        if ($rawValue === '') {
+            return array();
+        }
+
+        $values = explode(',', (string) $rawValue);
+        $statusIds = array();
+        foreach ($values as $value) {
+            $statusId = (int) trim((string) $value);
+            if ($statusId > 0) {
+                $statusIds[] = $statusId;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+        sort($statusIds);
+
+        return $statusIds;
     }
 
     private function getSamedayLockerCount()

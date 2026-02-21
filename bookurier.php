@@ -34,6 +34,8 @@ class Bookurier extends CarrierModule
     const CONFIG_SAMEDAY_PICKUP_POINTS_CACHE = 'BOOKURIER_SAMEDAY_PICKUP_POINTS_CACHE';
     const CONFIG_BOOKURIER_CARRIER_REFERENCE = 'BOOKURIER_BOOKURIER_CARRIER_REFERENCE';
     const CONFIG_CARRIER_REFERENCE = 'BOOKURIER_CARRIER_REFERENCE';
+    const CONFIG_AUTO_AWB_ENABLED = 'BOOKURIER_AUTO_AWB_ENABLED';
+    const CONFIG_AUTO_AWB_ALLOWED_STATUSES = 'BOOKURIER_AUTO_AWB_ALLOWED_STATUSES';
 
     const ACTION_SUBMIT_CONFIG = 'submitBookurierConfig';
     const ACTION_SYNC_LOCKERS = 'submitBookurierSyncLockers';
@@ -271,6 +273,41 @@ class Bookurier extends CarrierModule
         return (int) Configuration::get(self::CONFIG_SAMEDAY_ENABLED) === 1;
     }
 
+    public function isAutoAwbEnabled()
+    {
+        $value = Configuration::get(self::CONFIG_AUTO_AWB_ENABLED);
+        if ($value === false || $value === null || $value === '') {
+            return true;
+        }
+
+        return (int) $value === 1;
+    }
+
+    public function getAutoAwbAllowedStatusIds()
+    {
+        $statusIds = $this->parseStatusIds((string) Configuration::get(self::CONFIG_AUTO_AWB_ALLOWED_STATUSES));
+        if (!empty($statusIds)) {
+            return $statusIds;
+        }
+
+        return $this->getDefaultAutoAwbStatusIds();
+    }
+
+    public function generateAwbForOrderId($idOrder)
+    {
+        $order = new Order((int) $idOrder);
+        if (!\Validate::isLoadedObject($order)) {
+            throw new \RuntimeException('Order not found.');
+        }
+
+        $carrierReference = $this->resolveCarrierReference($order);
+        if (!$this->isManagedCarrierReference($carrierReference)) {
+            throw new \RuntimeException('Order carrier is not managed by Bookurier module.');
+        }
+
+        return $this->getAutoAwbService()->generateForOrder($order, (int) $order->id_cart, $carrierReference);
+    }
+
     private function getAutoAwbService()
     {
         if ($this->autoAwbService === null) {
@@ -288,6 +325,10 @@ class Bookurier extends CarrierModule
 
         $carrierReference = $this->resolveCarrierReference($order);
         if (!$this->isManagedCarrierReference($carrierReference)) {
+            return;
+        }
+
+        if (!$this->canAutoGenerateAwbForOrder($order)) {
             return;
         }
 
@@ -347,6 +388,25 @@ class Bookurier extends CarrierModule
         ), true);
     }
 
+    private function canAutoGenerateAwbForOrder($order)
+    {
+        if (!$this->isAutoAwbEnabled()) {
+            return false;
+        }
+
+        $allowedStatusIds = $this->getAutoAwbAllowedStatusIds();
+        if (empty($allowedStatusIds)) {
+            return false;
+        }
+
+        $currentState = (int) (is_object($order) ? $order->current_state : 0);
+        if ($currentState <= 0) {
+            return false;
+        }
+
+        return in_array($currentState, $allowedStatusIds, true);
+    }
+
     private function renderAdminAwbLink($params)
     {
         $idOrder = $this->resolveOrderIdFromHookParams($params);
@@ -358,19 +418,33 @@ class Bookurier extends CarrierModule
             return '';
         }
 
-        $awb = (new AwbRepository())->findByOrderId($idOrder);
-        if (!is_array($awb) || trim((string) ($awb['awb_code'] ?? '')) === '') {
+        $order = new Order($idOrder);
+        if (!\Validate::isLoadedObject($order)) {
             return '';
         }
 
+        $carrierReference = $this->resolveCarrierReference($order);
+        if (!$this->isManagedCarrierReference($carrierReference)) {
+            return '';
+        }
+
+        $awb = (new AwbRepository())->findByOrderId($idOrder);
+        $hasAwb = is_array($awb) && trim((string) ($awb['awb_code'] ?? '')) !== '';
+
         $this->renderedAdminAwbOrderId = $idOrder;
+        $manualGenerateUrl = (!$this->isAutoAwbEnabled() && !$hasAwb) ? $this->buildAwbGenerateUrl($idOrder) : '';
 
         $this->context->smarty->assign(array(
             'bookurier_awb_title' => $this->l('Bookurier AWB'),
             'bookurier_awb_code_label' => $this->l('AWB'),
-            'bookurier_awb_code' => (string) $awb['awb_code'],
+            'bookurier_awb_code' => $hasAwb ? (string) $awb['awb_code'] : '',
+            'bookurier_awb_empty_label' => $this->l('AWB not generated yet.'),
             'bookurier_awb_download_label' => $this->l('Download AWB PDF'),
-            'bookurier_awb_download_url' => $this->buildAwbDownloadUrl($idOrder),
+            'bookurier_awb_download_url' => $hasAwb ? $this->buildAwbDownloadUrl($idOrder) : '',
+            'bookurier_awb_generate_label' => $this->l('Generate AWB'),
+            'bookurier_awb_generating_label' => $this->l('Generating...'),
+            'bookurier_awb_generate_url' => $manualGenerateUrl,
+            'bookurier_awb_order_id' => (int) $idOrder,
         ));
 
         return $this->fetch('module:' . $this->name . '/views/templates/hook/admin_order_awb.tpl');
@@ -394,6 +468,11 @@ class Bookurier extends CarrierModule
         return (int) Tools::getValue('id_order');
     }
 
+    public function validateAwbGenerateToken($idOrder, $token)
+    {
+        return hash_equals($this->buildAwbGenerateToken($idOrder), (string) $token);
+    }
+
     private function buildAwbDownloadUrl($idOrder)
     {
         return $this->context->link->getModuleLink($this->name, 'awbpdf', array(
@@ -402,9 +481,60 @@ class Bookurier extends CarrierModule
         ));
     }
 
+    private function buildAwbGenerateUrl($idOrder)
+    {
+        return $this->context->link->getModuleLink($this->name, 'generateawb', array(
+            'id_order' => (int) $idOrder,
+            'token' => $this->buildAwbGenerateToken($idOrder),
+        ));
+    }
+
     private function buildAwbDownloadToken($idOrder)
     {
-        return hash_hmac('sha256', (string) (int) $idOrder, _COOKIE_KEY_);
+        return hash_hmac('sha256', 'download|' . (string) (int) $idOrder, _COOKIE_KEY_);
+    }
+
+    private function buildAwbGenerateToken($idOrder)
+    {
+        return hash_hmac('sha256', 'generate|' . (string) (int) $idOrder, _COOKIE_KEY_);
+    }
+
+    private function parseStatusIds($rawValue)
+    {
+        $rawValue = trim((string) $rawValue);
+        if ($rawValue === '') {
+            return array();
+        }
+
+        $parts = explode(',', $rawValue);
+        $statusIds = array();
+        foreach ($parts as $part) {
+            $statusId = (int) trim((string) $part);
+            if ($statusId > 0) {
+                $statusIds[] = $statusId;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+        sort($statusIds);
+
+        return $statusIds;
+    }
+
+    private function getDefaultAutoAwbStatusIds()
+    {
+        $statusIds = array();
+        foreach (array('PS_OS_PAYMENT', 'PS_OS_PREPARATION', 'PS_OS_SHIPPING') as $configKey) {
+            $statusId = (int) Configuration::get($configKey);
+            if ($statusId > 0) {
+                $statusIds[] = $statusId;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+        sort($statusIds);
+
+        return $statusIds;
     }
 
     private function ensureRequiredHooks()

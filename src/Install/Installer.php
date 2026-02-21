@@ -52,9 +52,27 @@ class Installer
         return \Configuration::updateValue(\Bookurier::CONFIG_LOG_LEVEL, 'info')
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENV, 'demo')
             && \Configuration::updateValue(\Bookurier::CONFIG_DEFAULT_SERVICE, '9')
+            && \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ENABLED, '1')
+            && \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES, $this->getDefaultAutoAwbStatusIds())
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENABLED, '0')
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINT, '0')
             && \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_PICKUP_POINTS_CACHE, '[]');
+    }
+
+    private function getDefaultAutoAwbStatusIds()
+    {
+        $statusIds = array();
+
+        foreach (array('PS_OS_PAYMENT', 'PS_OS_PREPARATION', 'PS_OS_SHIPPING') as $configKey) {
+            $statusId = (int) \Configuration::get($configKey);
+            if ($statusId > 0) {
+                $statusIds[] = $statusId;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+
+        return implode(',', $statusIds);
     }
 
     private function installDatabase()

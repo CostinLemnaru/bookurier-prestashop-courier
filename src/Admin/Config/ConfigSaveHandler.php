@@ -28,6 +28,11 @@ class ConfigSaveHandler
         $apiKey = trim((string) \Tools::getValue(\Bookurier::CONFIG_API_KEY, \Configuration::get(\Bookurier::CONFIG_API_KEY)));
         $defaultPickupPoint = (int) \Tools::getValue(\Bookurier::CONFIG_DEFAULT_PICKUP_POINT, \Configuration::get(\Bookurier::CONFIG_DEFAULT_PICKUP_POINT));
         $defaultService = (int) \Tools::getValue(\Bookurier::CONFIG_DEFAULT_SERVICE, \Configuration::get(\Bookurier::CONFIG_DEFAULT_SERVICE));
+        $autoAwbEnabled = (int) \Tools::getValue(
+            \Bookurier::CONFIG_AUTO_AWB_ENABLED,
+            \Configuration::get(\Bookurier::CONFIG_AUTO_AWB_ENABLED)
+        );
+        $autoAwbStatusIds = $this->resolveAutoAwbStatusIdsFromRequest();
 
         $samedayEnabled = (int) \Tools::getValue(\Bookurier::CONFIG_SAMEDAY_ENABLED, \Configuration::get(\Bookurier::CONFIG_SAMEDAY_ENABLED));
         $samedayUser = trim((string) \Tools::getValue(\Bookurier::CONFIG_SAMEDAY_API_USERNAME, \Configuration::get(\Bookurier::CONFIG_SAMEDAY_API_USERNAME)));
@@ -51,6 +56,15 @@ class ConfigSaveHandler
         }
         if (!$this->serviceOptionsProvider->isValid($defaultService)) {
             $errors[] = $this->t('Bookurier default service is invalid.');
+        }
+        if ($autoAwbEnabled === 1 && empty($autoAwbStatusIds)) {
+            $errors[] = $this->t('At least one order status must be selected when Auto generate AWB is enabled.');
+        }
+        if (!empty($autoAwbStatusIds)) {
+            $invalidStatusIds = array_diff($autoAwbStatusIds, $this->getAvailableOrderStatusIds());
+            if (!empty($invalidStatusIds)) {
+                $errors[] = $this->t('Auto AWB allowed statuses contain invalid values.');
+            }
         }
         if ($samedayEnabled === 1) {
             if ($samedayUser === '') {
@@ -78,6 +92,8 @@ class ConfigSaveHandler
         \Configuration::updateValue(\Bookurier::CONFIG_API_KEY, $apiKey);
         \Configuration::updateValue(\Bookurier::CONFIG_DEFAULT_PICKUP_POINT, (string) $defaultPickupPoint);
         \Configuration::updateValue(\Bookurier::CONFIG_DEFAULT_SERVICE, (string) $defaultService);
+        \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ENABLED, (string) $autoAwbEnabled);
+        \Configuration::updateValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES, implode(',', $autoAwbStatusIds));
         \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENABLED, (string) $samedayEnabled);
         \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_API_USERNAME, $samedayUser);
         \Configuration::updateValue(\Bookurier::CONFIG_SAMEDAY_ENV, $samedayEnv);
@@ -98,6 +114,53 @@ class ConfigSaveHandler
     private function normalizeSamedayEnvironment($environment)
     {
         return strtolower((string) $environment) === 'prod' ? 'prod' : 'demo';
+    }
+
+    private function resolveAutoAwbStatusIdsFromRequest()
+    {
+        $input = \Tools::getValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES, null);
+        if ($input === null) {
+            $input = \Tools::getValue(\Bookurier::CONFIG_AUTO_AWB_ALLOWED_STATUSES . '[]', array());
+        }
+
+        if (!is_array($input)) {
+            $input = explode(',', (string) $input);
+        }
+
+        $statusIds = array();
+        foreach ($input as $value) {
+            $statusId = (int) $value;
+            if ($statusId > 0) {
+                $statusIds[] = $statusId;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+        sort($statusIds);
+
+        return $statusIds;
+    }
+
+    private function getAvailableOrderStatusIds()
+    {
+        $idLang = (int) (\Context::getContext()->language->id ?: \Configuration::get('PS_LANG_DEFAULT'));
+        $states = \OrderState::getOrderStates($idLang);
+        if (!is_array($states)) {
+            return array();
+        }
+
+        $statusIds = array();
+        foreach ($states as $state) {
+            $idState = (int) ($state['id_order_state'] ?? 0);
+            if ($idState > 0) {
+                $statusIds[] = $idState;
+            }
+        }
+
+        $statusIds = array_values(array_unique($statusIds));
+        sort($statusIds);
+
+        return $statusIds;
     }
 
     private function t($message)
