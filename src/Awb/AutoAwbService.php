@@ -12,6 +12,7 @@ class AutoAwbService
     const COURIER_BOOKURIER = 'bookurier';
     const COURIER_SAMEDAY = 'sameday';
     const SAMEDAY_LOCKER_SERVICE = 15;
+    const SAMEDAY_PUDO_SERVICE = 17;
 
     private $module;
     private $awbRepository;
@@ -244,29 +245,53 @@ class AutoAwbService
             throw new \RuntimeException('Selected locker is not active.');
         }
 
-        $payload = $this->buildSamedayPayload($order, $lockerId, $locker);
-        $requestPayload = (string) json_encode($payload);
+        $serviceCandidates = $this->resolveSamedayServiceCandidates($locker);
+        $lastException = null;
 
-        $response = $this->module->getSamedayClient()->createAwb(
-            SamedayCreateAwbRequestDto::fromArray($payload)
-        );
+        foreach ($serviceCandidates as $index => $serviceId) {
+            $isLastCandidate = $index === count($serviceCandidates) - 1;
+            $payload = $this->buildSamedayPayload($order, $lockerId, $locker, (int) $serviceId);
+            $requestPayload = (string) json_encode($payload);
 
-        $responsePayload = (string) json_encode($response->getRawResponse());
-        $awbCode = trim((string) $response->getAwbNumber());
-        if (!$response->isSuccess() || $awbCode === '') {
-            throw new \RuntimeException(
-                'SameDay AWB missing. message=' . (string) $response->getMessage()
-                . ' response=' . $responsePayload
-            );
+            try {
+                $response = $this->module->getSamedayClient()->createAwb(
+                    SamedayCreateAwbRequestDto::fromArray($payload)
+                );
+
+                $responsePayload = (string) json_encode($response->getRawResponse());
+                $awbCode = trim((string) $response->getAwbNumber());
+                if (!$response->isSuccess() || $awbCode === '') {
+                    throw new \RuntimeException(
+                        'SameDay AWB missing. message=' . (string) $response->getMessage()
+                        . ' response=' . $responsePayload
+                    );
+                }
+
+                return array(
+                    'courier' => self::COURIER_SAMEDAY,
+                    'awb_code' => $awbCode,
+                    'locker_id' => $lockerId,
+                    'request_payload' => $requestPayload,
+                    'response_payload' => $responsePayload,
+                );
+            } catch (\Exception $exception) {
+                $lastException = $exception;
+
+                if ($isLastCandidate || !$this->isSamedayValidationFailure($exception)) {
+                    throw new \RuntimeException(
+                        $exception->getMessage() . ' | request=' . $requestPayload,
+                        (int) $exception->getCode(),
+                        $exception
+                    );
+                }
+            }
         }
 
-        return array(
-            'courier' => self::COURIER_SAMEDAY,
-            'awb_code' => $awbCode,
-            'locker_id' => $lockerId,
-            'request_payload' => $requestPayload,
-            'response_payload' => $responsePayload,
-        );
+        if ($lastException instanceof \Exception) {
+            throw $lastException;
+        }
+
+        throw new \RuntimeException('SameDay AWB could not be generated.');
     }
 
     private function buildBookurierPayload($order)
@@ -328,7 +353,7 @@ class AutoAwbService
         );
     }
 
-    private function buildSamedayPayload($order, $lockerId, array $locker)
+    private function buildSamedayPayload($order, $lockerId, array $locker, $serviceId = self::SAMEDAY_LOCKER_SERVICE)
     {
         $address = new \Address((int) $order->id_address_delivery);
         if (!\Validate::isLoadedObject($address)) {
@@ -359,7 +384,7 @@ class AutoAwbService
             'packageType' => 2,
             'packageNumber' => 1,
             'packageWeight' => (float) $this->resolveOrderWeight($order),
-            'service' => self::SAMEDAY_LOCKER_SERVICE,
+            'service' => (int) $serviceId,
             'awbPayment' => 1,
             'cashOnDelivery' => $this->isCodOrder($order) ? (float) $order->total_paid : 0.0,
             'cashOnDeliveryReturns' => 0.0,
@@ -382,6 +407,26 @@ class AutoAwbService
                 array('weight' => (float) $this->resolveOrderWeight($order)),
             ),
         );
+    }
+
+    private function resolveSamedayServiceCandidates(array $locker)
+    {
+        $lockerName = strtolower(trim((string) ($locker['name'] ?? '')));
+        $isPudo = strpos($lockerName, 'pudo') !== false;
+
+        if ($isPudo) {
+            return array(self::SAMEDAY_PUDO_SERVICE, self::SAMEDAY_LOCKER_SERVICE);
+        }
+
+        return array(self::SAMEDAY_LOCKER_SERVICE, self::SAMEDAY_PUDO_SERVICE);
+    }
+
+    private function isSamedayValidationFailure(\Exception $exception)
+    {
+        $message = strtolower((string) $exception->getMessage());
+
+        return strpos($message, 'http 400') !== false
+            && strpos($message, 'validation failed') !== false;
     }
 
     private function resolveCarrierReference($order)
