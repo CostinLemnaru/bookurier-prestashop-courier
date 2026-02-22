@@ -71,9 +71,10 @@ In pagina comenzii din Back Office, in panelul `Bookurier AWB`:
 ## Requirements / Prerequisites
 
 - PrestaShop `1.7+`, `8.x` sau `9.x`.
+- PHP `>= 7.1` (pentru PrestaShop 1.7 recomandat cel putin 7.1).
 - Modulul instalat in `modules/bookurier` si activat din Back Office.
 - Credentiale Bookurier valide (`API Username`, `API Password`); pentru status tracking: `API Key`.
 - Pentru SameDay Locker (optional): credentiale SameDay valide + `Sync SameDay Lockers` rulat cu succes.
 - Serverul magazinului trebuie sa permita conexiuni HTTPS outbound catre API-urile Bookurier/SameDay.
-- Extensia PHP `cURL` activa (modulul foloseste fallback cURL pentru request-uri HTTP).
+- Extensia PHP `cURL` activa (modulul foloseste cURL pentru request-uri HTTP).
 - Tarifele carrier-elor configurate in PrestaShop (`Shipping > Carriers`) conform regulilor magazinului.
