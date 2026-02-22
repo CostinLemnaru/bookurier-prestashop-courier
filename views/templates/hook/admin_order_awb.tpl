@@ -1,8 +1,16 @@
-<div class="card mt-2">
+{if !empty($bookurier_awb_is_legacy_ui)}
+<div class="panel panel-default bookurier-awb-panel">
+  <div class="panel-heading">
+    <strong>{$bookurier_awb_title|escape:'html':'UTF-8'}</strong>
+  </div>
+  <div class="panel-body">
+{else}
+<div class="card mt-2 bookurier-awb-panel">
   <div class="card-header">
     <h3 class="card-header-title">{$bookurier_awb_title|escape:'html':'UTF-8'}</h3>
   </div>
   <div class="card-body">
+{/if}
     {if !empty($bookurier_awb_code)}
       <p>
         <strong>{$bookurier_awb_code_label|escape:'html':'UTF-8'}:</strong>
@@ -84,3 +92,22 @@
     {/if}
   </div>
 </div>
+
+{if !empty($bookurier_awb_is_legacy_ui)}
+  <style>
+    .bookurier-awb-panel {
+      margin-top: 12px;
+    }
+    .bookurier-awb-panel .panel-body {
+      padding: 14px !important;
+    }
+    .bookurier-awb-panel p {
+      margin: 0 0 10px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .bookurier-awb-panel .btn {
+      white-space: normal;
+    }
+  </style>
+{/if}

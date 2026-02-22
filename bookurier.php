@@ -170,7 +170,7 @@ class Bookurier extends CarrierModule
             'bookurier_selected_locker_id' => $selectedLockerId,
         ));
 
-        return $this->fetch('module:' . $this->name . '/views/templates/hook/carrier_extra.tpl');
+        return $this->renderHookTemplate('carrier_extra.tpl');
     }
 
     public function hookActionValidateOrder($params)
@@ -448,9 +448,21 @@ class Bookurier extends CarrierModule
             'bookurier_awb_generating_label' => $this->l('Generating...'),
             'bookurier_awb_generate_url' => $manualGenerateUrl,
             'bookurier_awb_order_id' => (int) $idOrder,
+            'bookurier_awb_is_legacy_ui' => version_compare(_PS_VERSION_, '1.7.8.0', '<'),
         ));
 
-        return $this->fetch('module:' . $this->name . '/views/templates/hook/admin_order_awb.tpl');
+        return $this->renderHookTemplate('admin_order_awb.tpl');
+    }
+
+    private function renderHookTemplate($templateName)
+    {
+        $relativePath = 'views/templates/hook/' . ltrim((string) $templateName, '/');
+
+        if (version_compare(_PS_VERSION_, '1.7.8.0', '<')) {
+            return $this->display(__FILE__, $relativePath);
+        }
+
+        return $this->fetch('module:' . $this->name . '/' . $relativePath);
     }
 
     public function validateAwbDownloadToken($idOrder, $token)
