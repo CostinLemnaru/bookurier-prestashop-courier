@@ -12,8 +12,8 @@ class ConfigSaveHandler
 
     public function __construct(
         $module,
-        SamedayPickupPointSyncService $pickupPointSyncService = null,
-        BookurierServiceOptionsProvider $serviceOptionsProvider = null
+        ?SamedayPickupPointSyncService $pickupPointSyncService = null,
+        ?BookurierServiceOptionsProvider $serviceOptionsProvider = null
     ) {
         $this->module = $module;
         $this->pickupPointSyncService = $pickupPointSyncService ?: new SamedayPickupPointSyncService($module);

@@ -35,7 +35,7 @@ class SamedayPickupPointSyncService
 
     private function fetchSamedayPickupPoints($username, $password, $environment)
     {
-        $client = new SamedayClient((string) $username, (string) $password, (string) $environment, null, $this->module->getLogger());
+        $client = new SamedayClient((string) $username, (string) $password, (string) $environment, $this->module->getLogger());
         $client->authenticate(true);
 
         $page = 1;

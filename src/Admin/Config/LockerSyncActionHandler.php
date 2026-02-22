@@ -12,8 +12,8 @@ class LockerSyncActionHandler
 
     public function __construct(
         $module,
-        SamedayLockerRepository $lockerRepository = null,
-        SamedayLockerSyncService $lockerSyncService = null
+        ?SamedayLockerRepository $lockerRepository = null,
+        ?SamedayLockerSyncService $lockerSyncService = null
     ) {
         $this->module = $module;
         $this->lockerRepository = $lockerRepository ?: new SamedayLockerRepository();

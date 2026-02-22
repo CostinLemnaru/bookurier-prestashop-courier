@@ -4,7 +4,7 @@
 - integrare SameDay Locker (livrare la locker),
 - generare AWB automata sau manuala din configurabil din Back Office.
 
-Compatibilitate: PrestaShop `1.7.8+`, `8.x`, `9.x`.
+Compatibilitate: PrestaShop `1.7+`, `8.x`, `9.x`.
 
 ## Functionalitate
 
@@ -67,3 +67,13 @@ In pagina comenzii din Back Office, in panelul `Bookurier AWB`:
 - Nu apar lockere in checkout: verifica `Enable SameDay = Yes` si ruleaza `Sync SameDay Lockers`.
 - Nu se genereaza AWB automat: verifica statusurile din `Auto AWB allowed statuses`.
 - Statusul AWB ramane generic: completeaza `Bookurier API Key (Tracking)`.
+
+## Requirements / Prerequisites
+
+- PrestaShop `1.7+`, `8.x` sau `9.x`.
+- Modulul instalat in `modules/bookurier` si activat din Back Office.
+- Credentiale Bookurier valide (`API Username`, `API Password`); pentru status tracking: `API Key`.
+- Pentru SameDay Locker (optional): credentiale SameDay valide + `Sync SameDay Lockers` rulat cu succes.
+- Serverul magazinului trebuie sa permita conexiuni HTTPS outbound catre API-urile Bookurier/SameDay.
+- Extensia PHP `cURL` activa (modulul foloseste fallback cURL pentru request-uri HTTP).
+- Tarifele carrier-elor configurate in PrestaShop (`Shipping > Carriers`) conform regulilor magazinului.

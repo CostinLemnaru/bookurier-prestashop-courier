@@ -4,8 +4,7 @@
   "type": "prestashop-module",
   "license": "proprietary",
   "require": {
-    "php": ">=7.2",
-    "guzzlehttp/guzzle": "^7.8"
+    "php": ">=7.2"
   },
   "autoload": {
     "psr-4": {

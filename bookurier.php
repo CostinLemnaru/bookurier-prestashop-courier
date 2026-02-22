@@ -56,7 +56,7 @@ class Bookurier extends CarrierModule
         $this->author = 'Bookurier';
         $this->need_instance = 0;
         $this->bootstrap = true;
-        $this->ps_versions_compliancy = array('min' => '1.7.8.0', 'max' => '9.99.99');
+        $this->ps_versions_compliancy = array('min' => '1.7.0.0', 'max' => '9.99.99');
         $this->renderedAdminAwbOrderId = 0;
 
         parent::__construct();
@@ -215,12 +215,12 @@ class Bookurier extends CarrierModule
 
     public function getOrderShippingCost($params, $shipping_cost)
     {
-        return 0.0;
+        return is_numeric($shipping_cost) ? (float) $shipping_cost : false;
     }
 
     public function getOrderShippingCostExternal($params)
     {
-        return 0.0;
+        return false;
     }
 
     public function resetClients()
@@ -246,7 +246,6 @@ class Bookurier extends CarrierModule
             $this->bookurierClient = new BookurierClient(
                 (string) Configuration::get(self::CONFIG_API_USER),
                 (string) Configuration::get(self::CONFIG_API_PASSWORD),
-                null,
                 $this->getLogger()
             );
         }
@@ -262,7 +261,6 @@ class Bookurier extends CarrierModule
                 (string) Configuration::get(self::CONFIG_SAMEDAY_API_USERNAME),
                 (string) Configuration::get(self::CONFIG_SAMEDAY_API_PASSWORD),
                 $environment,
-                null,
                 $this->getLogger()
             );
         }

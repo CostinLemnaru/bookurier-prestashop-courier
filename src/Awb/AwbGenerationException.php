@@ -12,7 +12,7 @@ class AwbGenerationException extends \RuntimeException
         $requestPayload = '',
         $responsePayload = '',
         $code = 0,
-        \Throwable $previous = null
+        ?\Throwable $previous = null
     ) {
         parent::__construct((string) $message, (int) $code, $previous);
         $this->requestPayload = (string) $requestPayload;
@@ -29,4 +29,3 @@ class AwbGenerationException extends \RuntimeException
         return $this->responsePayload;
     }
 }
-

@@ -10,7 +10,6 @@ use Bookurier\DTO\Bookurier\CreateAwbRequestDto;
 use Bookurier\DTO\Bookurier\CreateAwbResponseDto;
 use Bookurier\Exception\ApiException;
 use Bookurier\Logging\LoggerInterface;
-use GuzzleHttp\ClientInterface;
 
 class BookurierClient extends AbstractApiClient implements BookurierClientInterface
 {
@@ -37,21 +36,19 @@ class BookurierClient extends AbstractApiClient implements BookurierClientInterf
     /**
      * @param string $username
      * @param string $password
-     * @param ClientInterface|null $httpClient
      * @param LoggerInterface|null $logger
      * @param string $baseUrl
      */
     public function __construct(
         $username = '',
         $password = '',
-        ClientInterface $httpClient = null,
-        LoggerInterface $logger = null,
+        ?LoggerInterface $logger = null,
         $baseUrl = self::BASE_URL
     ) {
         $this->username = (string) $username;
         $this->password = (string) $password;
         $this->baseUrl = rtrim((string) $baseUrl, '/') . '/';
-        $this->initializeHttpClient($httpClient, $logger);
+        $this->initializeHttpClient($logger);
     }
 
     /**

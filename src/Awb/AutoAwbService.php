@@ -23,9 +23,9 @@ class AutoAwbService
 
     public function __construct(
         $module,
-        AwbRepository $awbRepository = null,
-        SamedayLockerSelectionRepository $lockerSelectionRepository = null,
-        SamedayLockerRepository $lockerRepository = null
+        ?AwbRepository $awbRepository = null,
+        ?SamedayLockerSelectionRepository $lockerSelectionRepository = null,
+        ?SamedayLockerRepository $lockerRepository = null
     ) {
         $this->module = $module;
         $this->awbRepository = $awbRepository ?: new AwbRepository();

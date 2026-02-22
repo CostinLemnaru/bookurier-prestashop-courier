@@ -11,7 +11,7 @@ class SamedayLockerSyncService
 
     private $lockerRepository;
 
-    public function __construct($module, SamedayLockerRepository $lockerRepository = null)
+    public function __construct($module, ?SamedayLockerRepository $lockerRepository = null)
     {
         $this->module = $module;
         $this->lockerRepository = $lockerRepository ?: new SamedayLockerRepository();
@@ -29,7 +29,7 @@ class SamedayLockerSyncService
 
     private function fetchFromApi($username, $password, $environment)
     {
-        $client = new SamedayClient((string) $username, (string) $password, (string) $environment, null, $this->module->getLogger());
+        $client = new SamedayClient((string) $username, (string) $password, (string) $environment, $this->module->getLogger());
         $client->authenticate(true);
 
         $page = 1;

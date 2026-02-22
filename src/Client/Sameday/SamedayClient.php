@@ -12,7 +12,6 @@ use Bookurier\DTO\Sameday\CreateAwbResponseDto;
 use Bookurier\DTO\Sameday\LockerDto;
 use Bookurier\Exception\ApiException;
 use Bookurier\Logging\LoggerInterface;
-use GuzzleHttp\ClientInterface;
 
 class SamedayClient extends AbstractApiClient implements SamedayClientInterface
 {
@@ -70,15 +69,13 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
      * @param string $username
      * @param string $password
      * @param string $environment
-     * @param ClientInterface|null $httpClient
      * @param LoggerInterface|null $logger
      */
     public function __construct(
         $username = '',
         $password = '',
         $environment = self::ENV_PROD,
-        ClientInterface $httpClient = null,
-        LoggerInterface $logger = null
+        ?LoggerInterface $logger = null
     ) {
         $this->username = (string) $username;
         $this->password = (string) $password;
@@ -86,7 +83,7 @@ class SamedayClient extends AbstractApiClient implements SamedayClientInterface
         $this->setEnvironment($environment);
         $this->token = '';
         $this->tokenExpireAt = '';
-        $this->initializeHttpClient($httpClient, $logger);
+        $this->initializeHttpClient($logger);
     }
 
     /**
