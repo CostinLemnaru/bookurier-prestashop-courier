@@ -2,7 +2,7 @@
 <module>
   <name>bookurier</name>
   <displayName><![CDATA[Bookurier Courier]]></displayName>
-  <version><![CDATA[0.1.0]]></version>
+  <version><![CDATA[0.1.1]]></version>
   <description><![CDATA[Development scaffold for Bookurier courier module.]]></description>
   <author><![CDATA[Bookurier]]></author>
   <tab><![CDATA[shipping_logistics]]></tab>
