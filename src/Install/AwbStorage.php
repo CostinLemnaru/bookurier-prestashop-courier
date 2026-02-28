@@ -31,6 +31,8 @@ class AwbStorage
             `awb_code` VARCHAR(64) NOT NULL DEFAULT \'\',
             `locker_id` INT UNSIGNED NOT NULL DEFAULT 0,
             `status` VARCHAR(16) NOT NULL DEFAULT \'error\',
+            `panel_status` VARCHAR(191) NOT NULL DEFAULT \'\',
+            `panel_status_checked_at` DATETIME NULL,
             `error_message` VARCHAR(500) NOT NULL DEFAULT \'\',
             `request_payload` LONGTEXT NULL,
             `response_payload` LONGTEXT NULL,

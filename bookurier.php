@@ -38,6 +38,7 @@ class Bookurier extends CarrierModule
     const CONFIG_CARRIER_REFERENCE = 'BOOKURIER_CARRIER_REFERENCE';
     const CONFIG_AUTO_AWB_ENABLED = 'BOOKURIER_AUTO_AWB_ENABLED';
     const CONFIG_AUTO_AWB_ALLOWED_STATUSES = 'BOOKURIER_AUTO_AWB_ALLOWED_STATUSES';
+    const AWB_STATUS_CACHE_TTL_SECONDS = 900;
 
     const ACTION_SUBMIT_CONFIG = 'submitBookurierConfig';
     const ACTION_SYNC_LOCKERS = 'submitBookurierSyncLockers';
@@ -517,25 +518,30 @@ class Bookurier extends CarrierModule
     private function resolveAwbStatusLabel(array $awb)
     {
         $storedStatus = $this->formatStoredAwbStatus((string) ($awb['status'] ?? ''));
+        $cachedStatus = $this->normalizeAwbStatusText((string) ($awb['panel_status'] ?? ''));
+        $cachedCheckedAt = trim((string) ($awb['panel_status_checked_at'] ?? ''));
         $courier = strtolower(trim((string) ($awb['courier'] ?? '')));
         $awbCode = trim((string) ($awb['awb_code'] ?? ''));
         if ($awbCode === '') {
-            return $storedStatus;
+            return $cachedStatus !== '' ? $cachedStatus : $storedStatus;
         }
 
+        if ($this->isAwbStatusCacheFresh($cachedCheckedAt)) {
+            return $cachedStatus !== '' ? $cachedStatus : $storedStatus;
+        }
+
+        $idOrder = (int) ($awb['id_order'] ?? 0);
         try {
+            $status = '';
             if ($courier === 'sameday') {
                 $payload = $this->getSamedayClient()->getAwbStatus($awbCode);
                 $expeditionStatus = isset($payload['expeditionStatus']) && is_array($payload['expeditionStatus'])
                     ? $payload['expeditionStatus']
                     : array();
-                $status = trim((string) ($expeditionStatus['statusLabel'] ?? $expeditionStatus['status'] ?? ''));
-                if ($status !== '') {
-                    return $status;
-                }
+                $status = $this->normalizeAwbStatusText((string) ($expeditionStatus['statusLabel'] ?? $expeditionStatus['status'] ?? ''));
             }
 
-            if ($courier === 'bookurier') {
+            if ($courier === 'bookurier' && $status === '') {
                 $apiKey = trim((string) Configuration::get(self::CONFIG_API_KEY));
                 if ($apiKey !== '') {
                     $payload = $this->getBookurierClient()->getAwbHistory($apiKey, $awbCode);
@@ -561,12 +567,25 @@ class Bookurier extends CarrierModule
                             }
                         }
                     }
-                    if ($status !== '') {
-                        return $status;
-                    }
                 }
             }
+
+            if ($status !== '') {
+                if ($idOrder > 0) {
+                    (new AwbRepository())->savePanelStatus($idOrder, $status);
+                }
+
+                return $status;
+            }
+
+            if ($idOrder > 0) {
+                (new AwbRepository())->touchPanelStatusCheck($idOrder);
+            }
         } catch (\Exception $exception) {
+            if ($idOrder > 0) {
+                (new AwbRepository())->touchPanelStatusCheck($idOrder);
+            }
+
             $this->getLogger()->warning('Could not fetch AWB status for BO panel.', array(
                 'id_order' => (int) ($awb['id_order'] ?? 0),
                 'courier' => $courier,
@@ -575,7 +594,7 @@ class Bookurier extends CarrierModule
             ));
         }
 
-        return $storedStatus;
+        return $cachedStatus !== '' ? $cachedStatus : $storedStatus;
     }
 
     private function formatStoredAwbStatus($status)
@@ -595,6 +614,26 @@ class Bookurier extends CarrierModule
     private function normalizeAwbStatusText($status)
     {
         return trim((string) preg_replace('/\s+/', ' ', (string) $status));
+    }
+
+    private function isAwbStatusCacheFresh($checkedAt)
+    {
+        $checkedAt = trim((string) $checkedAt);
+        if ($checkedAt === '') {
+            return false;
+        }
+
+        $checkedTimestamp = strtotime($checkedAt);
+        if ($checkedTimestamp === false) {
+            return false;
+        }
+
+        $ttlSeconds = (int) self::AWB_STATUS_CACHE_TTL_SECONDS;
+        if ($ttlSeconds <= 0) {
+            return false;
+        }
+
+        return (time() - $checkedTimestamp) <= $ttlSeconds;
     }
 
     private function parseStatusIds($rawValue)
